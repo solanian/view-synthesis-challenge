@@ -1,0 +1,3 @@
+[submodule "zipnerf-pytorch"]
+	path = zipnerf-pytorch
+	url = https://github.com/SuLvXiangXin/zipnerf-pytorch
