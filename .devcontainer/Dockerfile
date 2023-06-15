@@ -53,12 +53,12 @@ ENV CMAKE_PREFIX_PATH="$(dirname $(which conda))/../"
 
 CMD mkdir -p /workspace
 
-ARG CONDA_ENV_NAME="zipnerf"
-ARG CONDA_ENV_DIR="${CONDA_ENV_NAME}_env"
-RUN conda create -y -n ${CONDA_ENV_NAME} python=3.9
+# ARG CONDA_ENV_NAME="zipnerf"
+# ARG CONDA_ENV_DIR="${CONDA_ENV_NAME}_env"
+# RUN conda create -y -n ${CONDA_ENV_NAME} python=3.9
 
-# make the shell use the new conda envrionment by default temporarily
-SHELL ["conda", "run", "-n", "zipnerf", "/bin/bash", "-c"]
+# # make the shell use the new conda envrionment by default temporarily
+# SHELL ["conda", "run", "-n", "zipnerf", "/bin/bash", "-c"]
 
 # Install ZIP-NeRF Requirements
 WORKDIR /workspace
@@ -66,8 +66,6 @@ RUN git clone https://github.com/SuLvXiangXin/zipnerf-pytorch.git
 WORKDIR /workspace/zipnerf-pytorch
 RUN pip install -r requirements.txt
 RUN pip install ./gridencoder
-WORKDIR /workspace
-RUN rm -rf zipnerf-pytorch
 
 # Install nvdiffrast (optional, for textured mesh)
 WORKDIR /workspace

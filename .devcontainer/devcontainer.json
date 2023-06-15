@@ -33,6 +33,7 @@
 		"oderwat.indent-rainbow",
 		"analytic-signal.preview-html",
 		"mhutchie.git-graph",
+		"chrisjsewell.gulp-lattice",
 	],
 	"workspaceMount": "source=${localWorkspaceFolder},target=/workspace/view-synthesis-challenge,type=bind,consistency=cached",
 	"workspaceFolder": "/workspace/view-synthesis-challenge",
