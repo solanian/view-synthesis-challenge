@@ -1,0 +1,3 @@
+include 'configs/360.gin'
+Config.multiscale = True
+Config.multiscale_levels = 4
