@@ -4,8 +4,6 @@ FROM nvcr.io/nvidia/pytorch:${VERSION}-py3
 ARG DEBIAN_FRONTEND=noninteractive
 ENV TZ=Asia/Seoul
 
-RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 847005AE619067D5
-
 ## tzdata
 RUN apt-get update && \
     apt-get install -y tzdata && \
@@ -49,7 +47,7 @@ RUN groupadd $USERNAME \
 # [Optional] Set the default user. Omit if you want to keep the default as root.
 USER $USERNAME
 
-ENV TORCH_CUDA_ARCH_LIST="3.5;5.0;6.0;6.1;7.0;7.5;8.0;8.6+PTX"
+ENV TORCH_CUDA_ARCH_LIST="7.0;7.5;8.0;8.6+PTX"
 ENV TORCH_NVCC_FLAGS="-Xfatbin -compress-all"
 ENV CMAKE_PREFIX_PATH="$(dirname $(which conda))/../"
 
@@ -67,7 +65,7 @@ WORKDIR /workspace
 RUN git clone https://github.com/SuLvXiangXin/zipnerf-pytorch.git
 WORKDIR /workspace/zipnerf-pytorch
 RUN pip install -r requirements.txt
-# RUN pip install ./gridencoder
+RUN pip install ./gridencoder
 WORKDIR /workspace
 RUN rm -rf zipnerf-pytorch
 
