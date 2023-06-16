@@ -9,3 +9,6 @@ build/
 gridendocer.egg-info/
 *.pyx
 *.pyc
+
+.vscode
+devcontainer.json
