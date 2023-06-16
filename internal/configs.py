@@ -6,12 +6,17 @@ import torch
 import torch.nn.functional as F
 from absl import flags
 import gin
+import jax.numpy as jnp
 from internal import utils
+from internal import coord
+
 
 gin.add_config_file_search_path('configs/')
 
 configurables = {
     'torch': [torch.reciprocal, torch.log, torch.log1p, torch.exp, torch.sqrt, torch.square],
+	'jnp': [jnp.reciprocal],
+	'coord': [coord.contract],
 }
 
 for module, configurables in configurables.items():
@@ -46,7 +51,7 @@ class Config:
     near: float = 2.  # Near plane distance.
     far: float = 6.  # Far plane distance.
     exp_name: str = "test"  # experiment name
-    data_dir: Optional[str] = "/SSD_DISK/datasets/360_v2/bicycle"  # Input data directory.
+    data_dir: Optional[str] = "data/mip_nerf_360/bicycle"  # Input data directory.
     vocab_tree_path: Optional[str] = None  # Path to vocab tree for COLMAP.
     render_chunk_size: int = 65536  # Chunk size for whole-image renderings.
     num_showcase_images: int = 5  # The number of test-set images to showcase.
@@ -165,6 +170,7 @@ def define_common_flags():
 
 def load_config():
     """Load the config, and optionally checkpoint it."""
+    print(flags.FLAGS.gin_configs, flags.FLAGS.gin_bindings)
     gin.parse_config_files_and_bindings(
         flags.FLAGS.gin_configs, flags.FLAGS.gin_bindings, skip_unknown=True)
     config = Config()
