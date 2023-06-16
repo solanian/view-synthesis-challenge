@@ -6,19 +6,9 @@ Config.far = 1.
 Config.factor = 4
 Config.forward_facing = True
 
-Model.ray_shape = 'cylinder'
-
-PropMLP.net_depth = 4
-PropMLP.net_width = 256
-PropMLP.basis_shape = 'octahedron'
-PropMLP.basis_subdivisions = 1
 PropMLP.disable_density_normals = True  # Turn this off if using orientation loss.
 PropMLP.disable_rgb = True
 
-NerfMLP.net_depth = 8
-NerfMLP.net_width = 256
-NerfMLP.basis_shape = 'octahedron'
-NerfMLP.basis_subdivisions = 1
 NerfMLP.disable_density_normals = True  # Turn this off if using orientation loss.
 
 NerfMLP.max_deg_point = 16
@@ -38,6 +28,7 @@ Model.num_levels = 2
 Model.num_prop_samples = 128  # Using extra samples for now because of noise instability.
 Model.num_nerf_samples = 128
 Model.opaque_background = True
+Model.distinct_prop = False
 
 # RGB activation we use for linear color outputs is exp(x - 5).
 NerfMLP.rgb_padding = 0.

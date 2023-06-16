@@ -2,12 +2,8 @@ from internal import math
 from internal import utils
 import numpy as np
 import torch
-import jax.numpy as jnp
-
 # from torch.func import vmap, jacrev
 
-def pytorch_to_jax(pytorch_tensor):
-    return jnp.array(pytorch_tensor.cpu().detach().numpy())
 
 def contract(x):
     """Contracts points towards the origin (Eq 10 of arxiv.org/abs/2111.12077)."""
@@ -165,8 +161,7 @@ def construct_ray_warps(fn, t_near, t_far, lam=None):
         fn_fwd = fn
         fn_inv = inv_mapping[fn.__name__]
 
-    s_near, s_far = [fn_fwd(pytorch_to_jax(x)) for x in (t_near, t_far)]
-
+    s_near, s_far = [fn_fwd(x) for x in (t_near, t_far)]
     t_to_s = lambda t: (fn_fwd(t) - s_near) / (s_far - s_near)
     s_to_t = lambda s: fn_inv(s * s_far + (1 - s) * s_near)
     return t_to_s, s_to_t

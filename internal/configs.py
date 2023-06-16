@@ -6,17 +6,12 @@ import torch
 import torch.nn.functional as F
 from absl import flags
 import gin
-import jax.numpy as jnp
 from internal import utils
-from internal import coord
-
 
 gin.add_config_file_search_path('configs/')
 
 configurables = {
     'torch': [torch.reciprocal, torch.log, torch.log1p, torch.exp, torch.sqrt, torch.square],
-	'jnp': [jnp.reciprocal],
-	'coord': [coord.contract],
 }
 
 for module, configurables in configurables.items():
@@ -170,7 +165,6 @@ def define_common_flags():
 
 def load_config():
     """Load the config, and optionally checkpoint it."""
-    print(flags.FLAGS.gin_configs, flags.FLAGS.gin_bindings)
     gin.parse_config_files_and_bindings(
         flags.FLAGS.gin_configs, flags.FLAGS.gin_bindings, skip_unknown=True)
     config = Config()

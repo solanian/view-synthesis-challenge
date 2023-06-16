@@ -2,6 +2,7 @@ Config.dataset_loader = 'blender'
 Config.batching = 'single_image'
 Config.near = 2
 Config.far = 6
+
 Config.eval_render_interval = 5
 Config.compute_normal_metrics = True
 Config.data_loss_type = 'mse'
@@ -24,12 +25,8 @@ Model.dilation_multiplier = 0.
 Model.dilation_bias = 0.
 Model.single_jitter = False
 Model.resample_padding = 0.01
+Model.distinct_prop = False
 
-NerfMLP.net_depth = 8
-NerfMLP.net_width = 256
-NerfMLP.net_depth_viewdirs = 8
-NerfMLP.basis_shape = 'octahedron'
-NerfMLP.basis_subdivisions = 1
 NerfMLP.disable_density_normals = False
 NerfMLP.enable_pred_normals = True
 NerfMLP.use_directional_enc = True
