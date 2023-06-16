@@ -1,0 +1,22 @@
+{
+	// Use IntelliSense to learn about possible attributes.
+	// Hover to view descriptions of existing attributes.
+	// For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "train.py",
+			"type": "python",
+			"request": "launch",
+			"program": "${workspaceFolder}/train.py",
+			"args": [
+				"--gin_configs", "configs/360.gin",
+				"--gin_bindings", "Config.data_dir = 'data/mip_nerf_360/bicycle'",
+				"--gin_bindings", "Config.exp_name = '360_v2/bicycle'",
+				"--gin_bindings", "Config.factor = 4",
+			],
+			"console": "integratedTerminal",
+			"justMyCode": false
+		}
+	]
+}
