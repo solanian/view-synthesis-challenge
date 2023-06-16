@@ -123,3 +123,5 @@ if [[ -z "$TMUX" ]]; then \
         exec tmux
     fi
 fi
+
+source activate

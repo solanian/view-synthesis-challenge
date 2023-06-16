@@ -1,4 +1,4 @@
-ARG VERSION=22.05
+ARG VERSION=22.09
 FROM nvcr.io/nvidia/pytorch:${VERSION}-py3
 
 ARG DEBIAN_FRONTEND=noninteractive
@@ -75,8 +75,11 @@ RUN git clone https://github.com/NVlabs/nvdiffrast \
 
 # Install a specific cuda version of torch_scatter 
 # see more detail at https://github.com/rusty1s/pytorch_scatter
-ARG CUDA=cu117
-RUN pip install torch-scatter -f https://data.pyg.org/whl/torch-2.0.0+${CUDA}.html
+ARG CUDA_VERSION=11.8
+RUN pip install torch-scatter -f https://pytorch-geometric.com/whl/torch-${CUDA_VERSION}.html
+
+# Install jax, jaxlib
+RUN pip install --upgrade "jax[cuda11_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 
 # Install tmux-beautify
 RUN git clone https://github.com/gpakosz/.tmux.git ~/.oh-my-tmux \
@@ -85,5 +88,4 @@ RUN git clone https://github.com/gpakosz/.tmux.git ~/.oh-my-tmux \
 	&& cp ~/.oh-my-tmux/.tmux.conf.local ~/.tmux.conf.local
 
 ADD .bashrc /home/$USERNAME
-RUN conda init bash
 ENV SHELL /bin/bash
