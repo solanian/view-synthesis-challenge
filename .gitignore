@@ -1,6 +1,10 @@
 data/
-build/
-gridendocer.egg-info/
+
 *.png
 *.jpg
 *.npy
+
+build/
+gridendocer.egg-info/
+*.pyx
+*.pyc

@@ -2,7 +2,7 @@
 
 SCENE=bicycle
 EXPERIMENT=blender/"$SCENE"
-DATA_ROOT=/SSD_DISK/datasets/360_v2
+DATA_ROOT=data/mip_nerf_360
 DATA_DIR="$DATA_ROOT"/"$SCENE"
 
 accelerate launch extract.py --gin_configs=configs/360.gin \

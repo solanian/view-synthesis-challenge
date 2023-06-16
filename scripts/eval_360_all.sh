@@ -2,7 +2,7 @@
 
 EXPERIMENT_PREFIX=360_v2
 SCENE=("bicycle" "garden" "stump")
-DATA_ROOT=/SSD_DISK/datasets/360_v2
+DATA_ROOT=data/mip_nerf_360
 
 len=${#SCENE[@]}
 for(( i=0; i<$len; i++ ))

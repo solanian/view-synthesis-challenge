@@ -2,7 +2,7 @@
 
 SCENE=bicycle
 EXPERIMENT=360_v2_glo/"$SCENE"
-DATA_ROOT=/SSD_DISK/datasets/360_v2
+DATA_ROOT=data/mip_nerf_360
 DATA_DIR="$DATA_ROOT"/"$SCENE"
 
 rm exp/"$EXPERIMENT"/*
