@@ -1,5 +1,8 @@
-ARG VERSION=22.09
-FROM nvcr.io/nvidia/pytorch:${VERSION}-py3
+# ARG VERSION=22.09
+# FROM nvcr.io/nvidia/pytorch:${VERSION}-py3
+FROM lukaszkucinski/cuda117_cudnn86
+
+USER root
 
 ARG DEBIAN_FRONTEND=noninteractive
 ENV TZ=Asia/Seoul
@@ -75,11 +78,11 @@ RUN git clone https://github.com/NVlabs/nvdiffrast \
 
 # Install a specific cuda version of torch_scatter 
 # see more detail at https://github.com/rusty1s/pytorch_scatter
-ARG CUDA_VERSION=11.8
-RUN pip install torch-scatter -f https://pytorch-geometric.com/whl/torch-${CUDA_VERSION}.html
+# ARG CUDA_VERSION=11.8
+# RUN pip install torch-scatter -f https://pytorch-geometric.com/whl/torch-${CUDA_VERSION}.html
 
-# Install jax, jaxlib
-RUN pip install --upgrade "jax[cuda11_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+ARG CUDA=cu117
+RUN pip install torch-scatter -f https://data.pyg.org/whl/torch-2.0.1+${CUDA}.html
 
 # Install tmux-beautify
 RUN git clone https://github.com/gpakosz/.tmux.git ~/.oh-my-tmux \
