@@ -84,6 +84,8 @@ RUN git clone https://github.com/NVlabs/nvdiffrast \
 ARG CUDA=cu117
 RUN pip install torch-scatter -f https://data.pyg.org/whl/torch-2.0.1+${CUDA}.html
 
+RUN pip install gdown
+
 # Install tmux-beautify
 RUN git clone https://github.com/gpakosz/.tmux.git ~/.oh-my-tmux \
 	&& echo "set -g mouse on" >> ~/.oh-my-tmux/.tmux.conf \

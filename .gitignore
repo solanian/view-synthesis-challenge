@@ -1,5 +1,6 @@
 data/
 exp/
+.hypothesis/
 
 *.png
 *.jpg
