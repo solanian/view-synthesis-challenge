@@ -39,6 +39,7 @@ class Config:
     llff_use_all_images_for_training: bool = False
     llff_use_all_images_for_testing: bool = False
     use_tiffs: bool = False  # If True, use 32-bit TIFFs. Used only by Blender.
+    use_mask: bool = False
     compute_disp_metrics: bool = False  # If True, load and compute disparity MSE.
     compute_normal_metrics: bool = False  # If True, load and compute normal MAE.
     disable_multiscale_loss: bool = False  # If True, disable multiscale loss.
@@ -153,6 +154,7 @@ class Config:
     decimate_target: int = -1
     vertex_color: bool = True
     vertex_projection: bool = True
+	
 
 
 def define_common_flags():

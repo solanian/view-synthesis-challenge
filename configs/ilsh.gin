@@ -1,0 +1,17 @@
+Config.dataset_loader = 'ilsh_llff'
+Config.near = 3.5
+Config.far = 7.0
+Config.factor = 1
+Config.max_steps = 50000
+
+
+Model.raydist_fn = None
+
+PropMLP.disable_density_normals = True
+PropMLP.disable_rgb = True
+PropMLP.grid_level_dim = 1
+
+Config.use_mask = True
+
+NerfMLP.disable_density_normals = True
+
