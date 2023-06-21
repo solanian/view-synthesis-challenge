@@ -590,7 +590,6 @@ class ILSHBlender(Dataset):
 
 class ILSHLLFF(Dataset):
 	"""ILSH Dataset based on llff"""
-
 	def _load_renderings(self, config):
 		poses_bounds = np.load(os.path.join(self.data_dir, 'poses_bounds_train.npy'))  # (N_images, 17)
 		image_names = sorted(glob.glob(os.path.join(self.data_dir, 'images/*')))
@@ -601,14 +600,17 @@ class ILSHLLFF(Dataset):
 				'Mismatch between number of images and number of poses! Please rerun COLMAP!'
 		
 		poses = poses_bounds[:, :15].reshape(-1, 3, 5)  # (N_images, 3, 5)
-		# bounds = poses_bounds[:, -2:]  # (N_images, 2) = [0.8, 5], give arb value [0.4, 2.8]?
-		bounds = [0.4, 2.8]
+		bounds = poses_bounds[:, -2:]  # (N_images, 2) = [0.8, 5], give arb value [0.4, 2.8]?
+		# bounds = np.array([0.4, 2.8])
 		hwf = poses[:, :, -1]
 		poses = poses[:, :, :-1]
 
 		H, W, self.focal = hwf[0]  # original intrinsics, same for all images
 		self.width, self.height = np.array([int(W / config.factor), int(H / config.factor)])
 		self.pixtocams = camera_utils.get_pixtocam(self.focal, self.width, self.height)
+		# Scale the inverse intrinsics matrix by the image downsampling factor.
+		self.pixtocams = self.pixtocams @ np.diag([config.factor, config.factor, 1.])
+		self.pixtocams = self.pixtocams.astype(np.float32)
 		self.focal = 1. / self.pixtocams[0, 0]
 		self.distortion_params = None
 		self.camtype = camera_utils.ProjectionType.PERSPECTIVE
@@ -622,7 +624,7 @@ class ILSHLLFF(Dataset):
 			# self.colmap_to_world_transform = np.diag([scale] * 3 + [1])
 			bounds *= scale
 			# Recenter poses.
-			poses, transform = camera_utils.recenter_poses(poses)
+			# poses, transform = camera_utils.recenter_poses(poses) # contest chair recommend comment out this
 			# self.colmap_to_world_transform = (
 			# 		transform @ self.colmap_to_world_transform)
 			# Forward-facing spiral render path.
@@ -703,11 +705,10 @@ class ILSHLLFF(Dataset):
 			poses = raw_testscene_poses[self.split]
 
 		self.poses = poses
-		self.images = images
+		self.images = np.stack([lib_image.downsample(image, config.factor) for image in images])
 		self.camtoworlds = self.render_poses if config.render_path else poses
-		self.height, self.width = images.shape[1:3]
+		self.height, self.width = self.images.shape[1:3]
 
-		
 
 class LLFF(Dataset):
 	"""LLFF Dataset."""
@@ -826,7 +827,6 @@ class LLFF(Dataset):
 				config.exposure_percentile,
 				factor)
 			self.metadata = metadata
-
 		else:
 			# Load images.
 			colmap_image_dir = os.path.join(self.data_dir, 'images')
