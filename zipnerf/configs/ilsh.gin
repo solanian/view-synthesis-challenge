@@ -1,10 +1,14 @@
 Config.dataset_loader = 'ilsh_llff'
 Config.near = 3.5
 Config.far = 7.0
-Config.factor = 1
+Config.factor = 2
 Config.max_steps = 50000
+Config.forward_facing = True
+Config.llff_use_all_images_for_training = True
+Config.resume_from_checkpoint = True
+# Config.train_render_every = 1
 
-
+# Model.raydist_fn = 'power_transformation'
 Model.raydist_fn = None
 
 PropMLP.disable_density_normals = True

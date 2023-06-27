@@ -59,6 +59,7 @@ class DataSplit(enum.Enum):
     """Dataset split."""
     TRAIN = 'train'
     TEST = 'test'
+    VAL = 'val'
 
 
 class BatchingMethod(enum.Enum):

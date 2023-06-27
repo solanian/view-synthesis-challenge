@@ -12,14 +12,13 @@
 			"args": [
 				// basic config
 				// "--gin_configs", "configs/360.gin",
-				// "--gin_bindings", "Config.data_dir = 'data/mip_nerf_360/counter'",
-				// "--gin_bindings", "Config.exp_name = '360_v2/counter'",
+				// "--gin_bindings", "Config.data_dir = 'data/mip_nerf_360/bicycle'",
+				// "--gin_bindings", "Config.exp_name = '360_v2/bicycle'",
 				// "--gin_bindings", "Config.factor = 4",
 				// for ILSH
 				"--gin_configs", "configs/ilsh.gin",
 				"--gin_bindings", "Config.data_dir = 'data/devPhase/devPhase_01/004_00'",
 				"--gin_bindings", "Config.exp_name = 'ilsh/devPhase_01/004_00'",
-				"--gin_bindings", "Config.factor = 1",
 			],
 			"console": "integratedTerminal",
 			"justMyCode": false,
@@ -33,16 +32,22 @@
 			"request": "launch",
 			"program": "${workspaceFolder}/render.py",
 			"args": [
-				"--gin_configs", "configs/360.gin",
-				"--gin_bindings", "Config.data_dir = 'data/mip_nerf_360/bicycle'",
-				"--gin_bindings", "Config.exp_name = '360_v2/bicycle'",
-				"--gin_bindings", "Config.render_path = True",
-				"--gin_bindings", "Config.render_path_frames = 120",
-				"--gin_bindings", "Config.render_video_fps = 30",
-				"--gin_bindings", "Config.factor = 4",
+				// "--gin_configs", "configs/360.gin",
+				// "--gin_bindings", "Config.data_dir = 'data/mip_nerf_360/bicycle'",
+				// "--gin_bindings", "Config.exp_name = '360_v2/bicycle'",
+				// "--gin_bindings", "Config.render_path = True",
+				// "--gin_bindings", "Config.render_path_frames = 120",
+				// "--gin_bindings", "Config.render_video_fps = 30",
+				// "--gin_bindings", "Config.factor = 4",
+				"--gin_configs", "configs/ilsh.gin",
+				"--gin_bindings", "Config.data_dir = 'data/devPhase/devPhase_01/004_00'",
+				"--gin_bindings", "Config.exp_name = 'ilsh/devPhase_01/004_00'",
 			],
 			"console": "integratedTerminal",
-			"justMyCode": false
+			"justMyCode": false,
+			"env": {
+				"CUDA_VISIBLE_DEVICES": "4"
+			}
 		}
 	]
 }

@@ -154,6 +154,11 @@ class Config:
     decimate_target: int = -1
     vertex_color: bool = True
     vertex_projection: bool = True
+    
+    #
+    aug_roll: float = 0.0
+    aug_pitch: float = 0.0
+    aug_yaw: float = 0.0 
 	
 
 

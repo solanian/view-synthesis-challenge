@@ -18,11 +18,31 @@ import torch
 from tqdm import tqdm
 # This is ugly, but it works.
 import sys
+from pyquaternion import Quaternion
 
 sys.path.insert(0, 'internal/pycolmap')
 sys.path.insert(0, 'internal/pycolmap/pycolmap')
 import pycolmap
 
+
+def rotation_quaternion(roll, pitch, yaw):
+    roll_rad = np.radians(roll)
+    pitch_rad = np.radians(pitch)
+    yaw_rad = np.radians(yaw)
+
+    q_roll = Quaternion(axis=[1, 0, 0], angle=roll_rad)
+    q_pitch = Quaternion(axis=[0, 1, 0], angle=pitch_rad)
+    q_yaw = Quaternion(axis=[0, 0, 1], angle=yaw_rad)
+
+    q = q_yaw * q_pitch * q_roll
+    return q
+
+
+def rotate_transform_matrix(q, matrix):
+    rotation_matrix = q.rotation_matrix
+    rotated_matrix = np.dot(rotation_matrix, matrix[:, :3].T).T
+    translation = matrix[:, 3]
+    return np.column_stack((rotated_matrix, translation))
 
 def load_dataset(split, train_dir, config: configs.Config):
 	"""Loads a split of a dataset using the data_loader specified by `config`."""
@@ -591,19 +611,88 @@ class ILSHBlender(Dataset):
 class ILSHLLFF(Dataset):
 	"""ILSH Dataset based on llff"""
 	def _load_renderings(self, config):
+		if self.split.value == "test":
+			poses_bounds = np.load(os.path.join(self.data_dir, 'poses_bounds_val.npy'))  # (N_images, 17)
+			poses = poses_bounds[:, :15].reshape(-1, 3, 5)  # (N_images, 3, 5)
+			bounds = poses_bounds[:, -2:]  # (N_images, 2) = [0.8, 5], give arb value [0.4, 2.8]?
+			# bounds = np.array([0.4, 2.8])
+			hwf = poses[:, :, -1]
+			poses = poses[:, :, :-1]
+
+			H, W, self.focal = hwf[0]  # original intrinsics, same for all images
+			self.width, self.height = np.array([int(W / config.factor), int(H / config.factor)])
+			self.pixtocams = camera_utils.get_pixtocam(self.focal, self.width, self.height)
+			# Scale the inverse intrinsics matrix by the image downsampling factor.
+			self.pixtocams = self.pixtocams @ np.diag([config.factor, config.factor, 1.])
+			self.pixtocams = self.pixtocams.astype(np.float32)
+			self.focal = 1. / self.pixtocams[0, 0]
+			self.distortion_params = None
+			self.camtype = camera_utils.ProjectionType.PERSPECTIVE
+
+			if config.forward_facing:
+				# Set the projective matrix defining the NDC transformation.
+				self.pixtocam_ndc = self.pixtocams.reshape(-1, 3, 3)[0]
+				# Rescale according to a default bd factor.
+				scale = 1. / (bounds.min() * .75)
+				poses[:, :3, 3] *= scale
+				# self.colmap_to_world_transform = np.diag([scale] * 3 + [1])
+				bounds *= scale
+				# Recenter poses.
+				# poses, transform = camera_utils.recenter_poses(poses) # contest chair recommend comment out this
+				# self.colmap_to_world_transform = (
+				# 		transform @ self.colmap_to_world_transform)
+				# Forward-facing spiral render path.
+				self.render_poses = camera_utils.generate_spiral_path(
+					poses, bounds, n_frames=config.render_path_frames)
+			else:
+				# Rotate/scale poses to align ground with xy plane and fit to unit cube.
+				poses, transform = camera_utils.transform_poses_pca(poses)
+				# self.colmap_to_world_transform = transform
+				if config.render_spline_keyframes is not None:
+					rets = camera_utils.create_render_spline_path(config, image_names,
+																poses, self.exposures)
+					self.spline_indices, self.render_poses, self.render_exposures = rets
+				else:
+					# Automatically generated inward-facing elliptical render path.
+					self.render_poses = camera_utils.generate_ellipse_path(
+						poses,
+						n_frames=config.render_path_frames,
+						z_variation=config.z_variation,
+						z_phase=config.z_phase)
+			
+			self.images = np.zeros((1, int(H/config.factor), int(W/config.factor), 3))
+			self.camtoworlds = self.render_poses if config.render_path else poses
+			self.height, self.width = self.images.shape[1:3]
+			return
+
 		poses_bounds = np.load(os.path.join(self.data_dir, 'poses_bounds_train.npy'))  # (N_images, 17)
-		image_names = sorted(glob.glob(os.path.join(self.data_dir, 'images/*')))
+		image_names = sorted(glob.glob(os.path.join(self.data_dir, 'bg_remove_images/*')))
+		# image_names = sorted(glob.glob(os.path.join(self.data_dir, 'images/*')))
+
+		# if self.split.value == 'train':
+		# 	aug_poses_bounds = np.load(os.path.join(self.data_dir, 'poses_bounds_aug.npy'))  # (N_images, 17)
+		# 	aug_image_names = sorted(glob.glob(os.path.join(self.data_dir, 'aug_images/*')))
+
+		# 	poses_bounds = np.concatenate((poses_bounds, aug_poses_bounds))
+		# 	image_names = image_names + aug_image_names
 
 		# load full resolution image then resize
-		if self.split.value in ['train', 'test']:
+		if self.split.value in ['train', 'val']:
 			assert len(poses_bounds) == len(image_names), \
 				'Mismatch between number of images and number of poses! Please rerun COLMAP!'
 		
 		poses = poses_bounds[:, :15].reshape(-1, 3, 5)  # (N_images, 3, 5)
-		bounds = poses_bounds[:, -2:]  # (N_images, 2) = [0.8, 5], give arb value [0.4, 2.8]?
-		# bounds = np.array([0.4, 2.8])
+		# bounds = poses_bounds[:, -2:]  # (N_images, 2) = [0.8, 5], give arb value [0.4, 2.8]?
+		bounds = np.array([0.4, 2.8])
 		hwf = poses[:, :, -1]
 		poses = poses[:, :, :-1]
+
+		if self.split.value == 'val':
+			# Create a quaternion for 1-degree roll, pitch, and yaw
+			q = rotation_quaternion(config.aug_roll, config.aug_pitch, config.aug_yaw)
+
+			# Apply the quaternion rotation to each matrices in the tensor
+			poses = np.array([rotate_transform_matrix(q, matrix) for matrix in poses])
 
 		H, W, self.focal = hwf[0]  # original intrinsics, same for all images
 		self.width, self.height = np.array([int(W / config.factor), int(H / config.factor)])
@@ -632,7 +721,7 @@ class ILSHLLFF(Dataset):
 				poses, bounds, n_frames=config.render_path_frames)
 		else:
 			# Rotate/scale poses to align ground with xy plane and fit to unit cube.
-			poses, transform = camera_utils.transform_poses_pca(poses)
+			# poses, transform = camera_utils.transform_poses_pca(poses)
 			# self.colmap_to_world_transform = transform
 			if config.render_spline_keyframes is not None:
 				rets = camera_utils.create_render_spline_path(config, image_names,
@@ -657,7 +746,7 @@ class ILSHLLFF(Dataset):
 		else:
 			test_indices = all_indices % config.llffhold == 0
 		split_indices = {
-			utils.DataSplit.TEST: all_indices[test_indices],
+			utils.DataSplit.VAL: all_indices[test_indices],
 			utils.DataSplit.TRAIN: all_indices[train_indices],
 		}
 		indices = split_indices[self.split]
@@ -680,10 +769,11 @@ class ILSHLLFF(Dataset):
 		# image_paths = [os.path.join(image_dir, t_img)
 		# 			for t_img in image_names]
 		images = [utils.load_img(x) for x in tqdm(image_names, desc='Loading LLFF dataset', disable=self.global_rank != 0, leave=False)]
-		masks = [np.load(utils.open_file(x.replace('images', 'masks').replace('jpg', 'npy'), 'rb')) for x in tqdm(image_names, desc='Loading LLFF dataset masks', disable=self.global_rank != 0, leave=False)]
-		images = np.stack(images, axis=0) / 255.
-		masks = np.stack(masks, axis=0)
-		images *= masks
+		# masks = [np.load(utils.open_file(x.replace('images', 'masks').replace('jpg', 'npy'), 'rb')) for x in tqdm(image_names, desc='Loading LLFF dataset masks', disable=self.global_rank != 0, leave=False)]
+		
+		# images = np.stack(images, axis=0) / 255.
+		# masks = np.stack(masks, axis=0)
+		# images *= masks
 
 		# EXIF data is usually only present in the original JPEG images.
 		# jpeg_paths = [os.path.join(colmap_image_dir, f) for f in image_names]
@@ -705,9 +795,30 @@ class ILSHLLFF(Dataset):
 			poses = raw_testscene_poses[self.split]
 
 		self.poses = poses
-		self.images = np.stack([lib_image.downsample(image, config.factor) for image in images])
+		self.images = np.stack([lib_image.downsample(image, config.factor) / 255. if image.shape[0] == H else image / 255. for image in images])
 		self.camtoworlds = self.render_poses if config.render_path else poses
 		self.height, self.width = self.images.shape[1:3]
+		self.poses_bounds = poses_bounds
+
+		# if self.split.value == 'val':
+		# 	poses_bounds[:, :12] = poses.reshape(len(poses_bounds), -1)
+		# 	if os.path.exists(os.path.join(self.data_dir, 'poses_bounds_aug.npy')):
+		# 		poses_bounds_tmp = np.load(os.path.join(self.data_dir, 'poses_bounds_aug.npy'))
+		# 		poses_bounds = np.concatenate((poses_bounds, poses_bounds_tmp))
+		# 	print(poses_bounds.shape)
+		# 	np.save(os.path.join(self.data_dir, 'poses_bounds_aug.npy'), poses_bounds)
+
+
+	def save_aug_poses(self, check_length):
+		self.poses_bounds[:, :12] = self.poses.reshape(len(self.poses_bounds), -1)
+		if os.path.exists(os.path.join(self.data_dir, 'poses_bounds_aug.npy')):
+			poses_bounds_tmp = np.load(os.path.join(self.data_dir, 'poses_bounds_aug.npy'))
+			self.poses_bounds = np.concatenate((self.poses_bounds, poses_bounds_tmp))
+		print(self.poses_bounds.shape, check_length)
+		if check_length == len(self.poses_bounds):
+			np.save(os.path.join(self.data_dir, 'poses_bounds_aug.npy'), self.poses_bounds)
+			print(os.path.join(self.data_dir, 'poses_bounds_aug.npy'))
+
 
 
 class LLFF(Dataset):
@@ -799,6 +910,7 @@ class LLFF(Dataset):
 			train_indices = all_indices
 		else:
 			train_indices = all_indices % config.llffhold != 0
+			train_indices = all_indices % 9 == 0
 		if config.llff_use_all_images_for_testing:
 			test_indices = all_indices
 		else:
