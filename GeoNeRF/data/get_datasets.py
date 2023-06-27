@@ -59,7 +59,8 @@ def get_training_dataset(args, downsample=1.0):
             max_len=-1,
             downSample=downsample,
             nb_views=args.nb_views,
-            imgs_folder_name="images_4",
+            imgs_folder_name="images",
+            # imgs_folder_name="images_4",
         ),
     ]
     weights = [0.5, 0.22, 0.12, 0.16]
@@ -96,7 +97,8 @@ def get_finetuning_dataset(args, downsample=1.0):
             downSample=downsample,
             nb_views=args.nb_views,
             scene=args.scene,
-            imgs_folder_name="images_4",
+            imgs_folder_name="images",
+            # imgs_folder_name="images_4",
         )
     elif args.dataset_name == "nerf":
         train_dataset = NeRF_Dataset(
@@ -137,7 +139,8 @@ def get_validation_dataset(args, downsample=1.0):
             downSample=downsample,
             nb_views=args.nb_views,
             scene=args.scene,
-            imgs_folder_name="images_4",
+            imgs_folder_name="images",
+            # imgs_folder_name="images_4",
         )
     elif args.dataset_name == "nerf":
         val_dataset = NeRF_Dataset(
