@@ -1,7 +1,7 @@
 {
 	"name": "view-synthesis-challenge",
 	"build": {
-		"dockerfile": "Dockerfile",
+		"dockerfile": "geonerf.Dockerfile",
 		"args": {
 			"USERNAME": "${localEnv:USER}",
 		}

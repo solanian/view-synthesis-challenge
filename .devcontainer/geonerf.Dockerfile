@@ -1,6 +1,6 @@
-# ARG VERSION=22.09
-# FROM nvcr.io/nvidia/pytorch:${VERSION}-py3
-FROM lukaszkucinski/cuda117_cudnn86
+ARG VERSION=21.06
+FROM nvcr.io/nvidia/pytorch:${VERSION}-py3
+
 
 USER root
 
@@ -56,41 +56,13 @@ ENV CMAKE_PREFIX_PATH="$(dirname $(which conda))/../"
 
 CMD mkdir -p /workspace
 
-# ARG CONDA_ENV_NAME="zipnerf"
-# ARG CONDA_ENV_DIR="${CONDA_ENV_NAME}_env"
-# RUN conda create -y -n ${CONDA_ENV_NAME} python=3.9
-
-# # make the shell use the new conda envrionment by default temporarily
-# SHELL ["conda", "run", "-n", "zipnerf", "/bin/bash", "-c"]
-
-# Install ZIP-NeRF Requirements
-WORKDIR /workspace
-RUN git clone https://github.com/SuLvXiangXin/zipnerf-pytorch.git
-WORKDIR /workspace/zipnerf-pytorch
-RUN pip install -r requirements.txt
-RUN pip install ./gridencoder
-
-# Install nvdiffrast (optional, for textured mesh)
-WORKDIR /workspace
-RUN git clone https://github.com/NVlabs/nvdiffrast \
- && pip install ./nvdiffrast \
- && rm -rf nvdiffrast
-
 # Install GeoNeRF Requirements
 WORKDIR /workspace
 RUN git clone https://github.com/idiap/GeoNeRF.git
 WORKDIR /workspace/GeoNeRF
 RUN pip install -r requirements.txt
 
-# Install a specific cuda version of torch_scatter 
-# see more detail at https://github.com/rusty1s/pytorch_scatter
-# ARG CUDA_VERSION=11.8
-# RUN pip install torch-scatter -f https://pytorch-geometric.com/whl/torch-${CUDA_VERSION}.html
-
-ARG CUDA=cu117
-RUN pip install torch-scatter -f https://data.pyg.org/whl/torch-2.0.1+${CUDA}.html
-
-RUN pip install gdown rembg[gpu,cli] torch==1.9.0 torchmetrics==0.6.0 test-tube
+RUN pip install gdown rembg[gpu,cli] test-tube torchmetrics==0.6.0 scikit-image==0.16.2 wandb
 
 # Install tmux-beautify
 RUN git clone https://github.com/gpakosz/.tmux.git ~/.oh-my-tmux \

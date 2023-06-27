@@ -26,9 +26,11 @@ def config_parser():
     parser.add_argument("--config", is_config_file=True, help="Config file path")
 
     # Datasets options
-    parser.add_argument("--dataset_name", type=str, default="llff", choices=["llff", "nerf", "dtu"],)
+    parser.add_argument("--dataset_name", type=str, default="llff", choices=["llff", "nerf", "dtu", "ilsh"],)
     parser.add_argument("--llff_path", type=str, help="Path to llff dataset")
     parser.add_argument("--llff_test_path", type=str, help="Path to llff dataset")
+    parser.add_argument("--ilsh_path", type=str, help="Path to ilsh dataset")
+    parser.add_argument("--ilsh_test_path", type=str, help="Path to ilsh dataset")
     parser.add_argument("--dtu_path", type=str, help="Path to dtu dataset")
     parser.add_argument("--dtu_pre_path", type=str, help="Path to preprocessed dtu dataset")
     parser.add_argument("--nerf_path", type=str, help="Path to nerf dataset")

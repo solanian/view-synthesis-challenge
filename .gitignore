@@ -1,10 +1,12 @@
-.data/
+data_root/
 exp/
 .hypothesis/
 
 *.png
 *.jpg
 *.npy
+*.ckpt
+*.json
 
 build/
 gridendocer.egg-info/

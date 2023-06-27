@@ -8,7 +8,7 @@
 			"name": "train.py",
 			"type": "python",
 			"request": "launch",
-			"program": "${workspaceFolder}/train.py",
+			"program": "${workspaceFolder}/GeoNeRF/run_geo_nerf.py",
 			"args": [
 				// basic config
 				// "--gin_configs", "configs/360.gin",
@@ -16,15 +16,17 @@
 				// "--gin_bindings", "Config.exp_name = '360_v2/bicycle'",
 				// "--gin_bindings", "Config.factor = 4",
 				// for ILSH
-				"--gin_configs", "configs/ilsh.gin",
-				"--gin_bindings", "Config.data_dir = 'data/devPhase/devPhase_01/004_00'",
-				"--gin_bindings", "Config.exp_name = 'ilsh/devPhase_01/004_00'",
+				// "--gin_configs", "configs/ilsh.gin",
+				// "--gin_bindings", "Config.data_dir = 'data/devPhase/devPhase_01/004_00'",
+				// "--gin_bindings", "Config.exp_name = 'ilsh/devPhase_01/004_00'",
+				"--config", "configs/config_face.txt"
 			],
 			"console": "integratedTerminal",
 			"justMyCode": false,
 			"env": {
 				"CUDA_VISIBLE_DEVICES": "4"
-			}
+			},
+			"cwd": "${workspaceFolder}/GeoNeRF"
 		},
 		{
 			"name": "render.py",

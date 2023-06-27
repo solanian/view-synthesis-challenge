@@ -26,6 +26,7 @@ import numpy as np
 from data.llff import LLFF_Dataset
 from data.dtu import DTU_Dataset
 from data.nerf import NeRF_Dataset
+from data.ilsh import ILSH_Dataset
 
 def get_training_dataset(args, downsample=1.0):
     train_datasets = [
@@ -109,6 +110,17 @@ def get_finetuning_dataset(args, downsample=1.0):
             nb_views=args.nb_views,
             scene=args.scene,
         )
+    elif args.dataset_name == "ilsh":
+        train_dataset = ILSH_Dataset(
+            root_dir=args.ilsh_path,
+            split="train",
+            max_len=-1,
+            downSample=downsample,
+            nb_views=args.nb_views,
+            scene=args.scene,
+            imgs_folder_name="images",
+            # imgs_folder_name="images_4",
+        )
 
     train_sampler = None
 
@@ -150,6 +162,17 @@ def get_validation_dataset(args, downsample=1.0):
             downSample=downsample,
             nb_views=args.nb_views,
             scene=args.scene,
+        )
+    elif args.dataset_name == "ilsh":
+        val_dataset = ILSH_Dataset(
+            root_dir=args.ilsh_test_path if not args.ilsh_test_path is None else args.ilsh_path,
+            split="val",
+            max_len=max_len,
+            downSample=downsample,
+            nb_views=args.nb_views,
+            scene=args.scene,
+            imgs_folder_name="images",
+            # imgs_folder_name="images_4",
         )
 
     return val_dataset

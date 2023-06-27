@@ -578,7 +578,8 @@ if __name__ == "__main__":
     else:
         logger = None
 
-    args.use_amp = False if args.eval else True
+    # args.use_amp = False if args.eval else True
+    args.use_amp = False
     trainer = Trainer(
         max_steps=args.num_steps,
         callbacks=checkpoint_callback,
