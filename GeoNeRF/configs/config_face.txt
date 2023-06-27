@@ -5,7 +5,7 @@ nb_views = 7  #### Set to 7 for fine-tuning
 
 ## dataset
 dataset_name = ilsh
-ilsh_path = input_data/devPhase/devPhase_01
+ilsh_path = /workspace/view-synthesis-challenge/data_root/devPhase/devPhase_01
 scene = 004_00
 downsample = 0.25
 
