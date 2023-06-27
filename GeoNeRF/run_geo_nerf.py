@@ -120,11 +120,11 @@ class GeoNeRF(LightningModule):
 
     def prepare_data(self):
         if self.hparams.scene == "None":  ## Generalizable
-            self.train_dataset, self.train_sampler = get_training_dataset(self.hparams)
-            self.val_dataset = get_validation_dataset(self.hparams)
+            self.train_dataset, self.train_sampler = get_training_dataset(self.hparams, float(self.hparams.downsample))
+            self.val_dataset = get_validation_dataset(self.hparams, float(self.hparams.downsample))
         else:  ## Fine-tune
             self.train_dataset, self.train_sampler = get_finetuning_dataset(
-                self.hparams
+                self.hparams, float(self.hparams.downsample)
             )
             self.val_dataset = get_validation_dataset(self.hparams)
 
@@ -542,6 +542,7 @@ if __name__ == "__main__":
     torch.set_default_dtype(torch.float32)
     args = config_parser()
     geonerf = GeoNeRF(args)
+    print(geonerf.hparams)
 
     ## Checking to logdir to see if there is any checkpoint file to continue with
     ckpt_path = f"{args.logdir}/{args.dataset_name}/{args.expname}/ckpts"
@@ -622,7 +623,8 @@ if __name__ == "__main__":
             if args.use_depth:
                 ckpt_file = "pretrained_weights/pretrained_w_depth.ckpt"
             else:
-                ckpt_file = "pretrained_weights/pretrained.ckpt"
+                ckpt_file = "pretrained_weights/ckpt_step-001899.ckpt"
+                # ckpt_file = "pretrained_weights/pretrained.ckpt"
                 print(ckpt_file, "@@@@")
         load_ckpt(geonerf.geo_reasoner, ckpt_file, "geo_reasoner")
         load_ckpt(geonerf.renderer, ckpt_file, "renderer")

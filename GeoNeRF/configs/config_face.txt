@@ -1,5 +1,5 @@
 ### INPUT
-expname = face_test
+expname = origin_scale
 logdir = ./logs
 nb_views = 7  #### Set to 7 for fine-tuning
 
@@ -7,6 +7,7 @@ nb_views = 7  #### Set to 7 for fine-tuning
 dataset_name = ilsh
 ilsh_path = input_data/devPhase/devPhase_01
 scene = 004_00
+downsample = 0.25
 
 ### TESTING
 chunk = 4096  ### Reduce it to save memory

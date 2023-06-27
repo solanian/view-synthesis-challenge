@@ -64,6 +64,16 @@ RUN pip install -r requirements.txt
 
 RUN pip install gdown rembg[gpu,cli] test-tube torchmetrics==0.6.0 scikit-image==0.16.2 wandb
 
+# Install nvtop
+RUN git clone -b 2.0.4 https://github.com/Syllo/nvtop.git && \
+    mkdir -p nvtop/build && cd nvtop/build && \
+    cmake .. && \
+    make && \
+    make install && \
+    cd ../.. && \
+    rm -rf nvtop
+
+
 # Install tmux-beautify
 RUN git clone https://github.com/gpakosz/.tmux.git ~/.oh-my-tmux \
 	&& echo "set -g mouse on" >> ~/.oh-my-tmux/.tmux.conf \

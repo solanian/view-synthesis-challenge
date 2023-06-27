@@ -117,7 +117,7 @@ class ILSH_Dataset(Dataset):
 
 		self.downsample = downSample
 		self.max_len = max_len
-		self.img_wh = (int(3000 * self.downsample), int(4096 * self.downsample))
+		self.img_wh = (int(3008 * self.downsample), int(4096 * self.downsample))
 
 		self.define_transforms()
 		self.blender2opencv = np.array(
