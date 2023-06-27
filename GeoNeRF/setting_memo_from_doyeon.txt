@@ -1,0 +1,23 @@
+GeoNeRF base 코드에서 weight와 dataset을 다운 받아야 함
+https://github.com/idiap/GeoNeRF
+
+1. pretrained_weights 다운받고, pretrained_weights폴더에 넣기
+https://drive.google.com/drive/folders/1ZtAc7VYvltcdodT_BrUrQ_4IAhz_L-Rf
+
+2. Competition 데이터셋 input_data폴더에 넣기
+https://www.notion.so/Dataset-25d37a9ba96743e7a8aa23f0473ed2f1
+
+3. 100epoch 학습한 ckpt파일 pretraind_weights폴더에 넣기
+https://www.notion.so/GeoNeRF-17a5a715aad34fd4a3d1616b9f4edda6
+
+4. evaluation
+python run_geo_nerf.py --config configs/config_face.txt --eval
+
+5. fine-tuning
+python run_geo_nerf.py --config configs/config_face.txt
+
+
+6. generalizable 모델 학습
+https://github.com/idiap/GeoNeRF 하단 참조
+
+코드상 주어진 DTU/Real Forward-Facing/Realistic Synthetic 데이터 다 다운 받으면, 200GB될듯?

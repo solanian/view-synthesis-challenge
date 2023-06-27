@@ -43,7 +43,10 @@
     # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
     # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     # SOFTWARE.
-
+import sys, os
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+print(ROOT_DIR)
+sys.path.append(ROOT_DIR)
 import torch
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import CosineAnnealingLR
@@ -418,12 +421,16 @@ class GeoNeRF(LightningModule):
                 log["val_psnr"] = mse2psnr(torch.mean(img_err_abs[:, mask_target] ** 2))
             else:
                 log["val_psnr"] = mse2psnr(torch.mean(img_err_abs**2))
-            log["val_ssim"] = ssim(
-                rendered_rgb_masked.permute(1, 2, 0).numpy(),
-                img_gt_masked.permute(1, 2, 0).numpy(),
-                data_range=1,
-                multichannel=True,
-            )
+            print("@@@@@")
+            print((rendered_rgb_masked.permute(1, 2, 0).numpy()).shape)
+            print((img_gt_masked.permute(1, 2, 0).numpy()).shape)
+            print("@@@@@")
+            # log["val_ssim"] = ssim(
+            #     rendered_rgb_masked.permute(1, 2, 0).numpy(),
+            #     img_gt_masked.permute(1, 2, 0).numpy(),
+            #     data_range=1,
+            #     multichannel=True,
+            # )
             log["val_lpips"] = lpips_fn(
                 rendered_rgb_masked[None] * 2 - 1, img_gt_masked[None] * 2 - 1
             ).item()  # Normalize to [-1,1]
@@ -484,7 +491,7 @@ class GeoNeRF(LightningModule):
                 f"{self.hparams.logdir}/{self.hparams.dataset_name}/{self.hparams.expname}/evaluation/{self.global_step:08d}_{self.wr_cntr:02d}.png",
                 (img_vis * 255).astype("uint8"),
             )
-
+            self.log("val_psnr", -1*log["val_psnr"], prog_bar=False)
             print(f"Image {self.wr_cntr:02d} rendered.")
             self.wr_cntr += 1
 
@@ -548,7 +555,8 @@ if __name__ == "__main__":
         f"{args.logdir}/{args.dataset_name}/{args.expname}/ckpts",
         filename="ckpt_step-{step:06d}",
         auto_insert_metric_name=False,
-        save_top_k=-1,
+        save_top_k=1,
+        monitor="val_psnr",
     )
 
     ## Setting up a logger
@@ -581,7 +589,8 @@ if __name__ == "__main__":
         gpus=1,
         num_sanity_val_steps=0,
         val_check_interval=2000 if args.scene == "None" else 1.0,
-        check_val_every_n_epoch=1000 if args.scene != 'None' else 1,
+        # check_val_every_n_epoch=1000 if args.scene != 'None' else 1,
+        check_val_every_n_epoch=50 if args.scene != 'None' else 1,
         benchmark=True,
         precision=16 if args.use_amp else 32,
         amp_level="O1",
@@ -612,7 +621,9 @@ if __name__ == "__main__":
             if args.use_depth:
                 ckpt_file = "pretrained_weights/pretrained_w_depth.ckpt"
             else:
-                ckpt_file = "pretrained_weights/pretrained.ckpt"
+                ckpt_file = "pretrained_weights/ckpt_step-001899.ckpt"
+                # ckpt_file = "pretrained_weights/pretrained.ckpt"
+                print(ckpt_file, "@@@@")
         load_ckpt(geonerf.geo_reasoner, ckpt_file, "geo_reasoner")
         load_ckpt(geonerf.renderer, ckpt_file, "renderer")
 
