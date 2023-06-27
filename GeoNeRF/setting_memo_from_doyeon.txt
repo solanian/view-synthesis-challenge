@@ -7,7 +7,7 @@ https://drive.google.com/drive/folders/1ZtAc7VYvltcdodT_BrUrQ_4IAhz_L-Rf
 2. Competition 데이터셋 input_data폴더에 넣기
 https://www.notion.so/Dataset-25d37a9ba96743e7a8aa23f0473ed2f1
 
-3. 100epoch 학습한 ckpt파일 pretraind_weights폴더에 넣기
+3. ckpt파일 pretraind_weights폴더에 넣기
 https://www.notion.so/GeoNeRF-17a5a715aad34fd4a3d1616b9f4edda6
 
 4. evaluation

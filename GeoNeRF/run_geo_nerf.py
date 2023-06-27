@@ -622,8 +622,7 @@ if __name__ == "__main__":
             if args.use_depth:
                 ckpt_file = "pretrained_weights/pretrained_w_depth.ckpt"
             else:
-                ckpt_file = "pretrained_weights/ckpt_step-001899.ckpt"
-                # ckpt_file = "pretrained_weights/pretrained.ckpt"
+                ckpt_file = "pretrained_weights/pretrained.ckpt"
                 print(ckpt_file, "@@@@")
         load_ckpt(geonerf.geo_reasoner, ckpt_file, "geo_reasoner")
         load_ckpt(geonerf.renderer, ckpt_file, "renderer")
