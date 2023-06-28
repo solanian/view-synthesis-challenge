@@ -126,7 +126,7 @@ class GeoNeRF(LightningModule):
             self.train_dataset, self.train_sampler = get_finetuning_dataset(
                 self.hparams, float(self.hparams.downsample)
             )
-            self.val_dataset = get_validation_dataset(self.hparams)
+            self.val_dataset = get_validation_dataset(self.hparams, float(self.hparams.downsample))
 
     def configure_optimizers(self):
         eps = 1e-5
@@ -145,7 +145,7 @@ class GeoNeRF(LightningModule):
             self.train_dataset,
             sampler=self.train_sampler,
             shuffle=True if self.train_sampler is None else False,
-            num_workers=8,
+            num_workers=16,
             batch_size=1,
             pin_memory=True,
         )
@@ -154,7 +154,7 @@ class GeoNeRF(LightningModule):
         return DataLoader(
             self.val_dataset,
             shuffle=False,
-            num_workers=1,
+            num_workers=8,
             batch_size=1,
             pin_memory=True,
         )
@@ -579,8 +579,7 @@ if __name__ == "__main__":
     else:
         logger = None
 
-    # args.use_amp = False if args.eval else True
-    args.use_amp = False
+    args.use_amp = False if args.eval else True
     trainer = Trainer(
         max_steps=args.num_steps,
         callbacks=checkpoint_callback,

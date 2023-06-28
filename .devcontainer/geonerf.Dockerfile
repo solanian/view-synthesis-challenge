@@ -1,6 +1,6 @@
-ARG VERSION=21.06
+ARG VERSION=21.09
 FROM nvcr.io/nvidia/pytorch:${VERSION}-py3
-
+# FROM pengjl929/cu11-torch1.9:latest
 
 USER root
 
@@ -62,17 +62,16 @@ RUN git clone https://github.com/idiap/GeoNeRF.git
 WORKDIR /workspace/GeoNeRF
 RUN pip install -r requirements.txt
 
-RUN pip install gdown rembg[gpu,cli] test-tube torchmetrics==0.6.0 scikit-image==0.16.2 wandb
+RUN pip install gdown test-tube torchmetrics==0.6.0 scikit-image==0.16.2 wandb typing-extensions==4.6.3
 
 # Install nvtop
 RUN git clone -b 2.0.4 https://github.com/Syllo/nvtop.git && \
     mkdir -p nvtop/build && cd nvtop/build && \
     cmake .. && \
     make && \
-    make install && \
+    sudo make install && \
     cd ../.. && \
     rm -rf nvtop
-
 
 # Install tmux-beautify
 RUN git clone https://github.com/gpakosz/.tmux.git ~/.oh-my-tmux \
