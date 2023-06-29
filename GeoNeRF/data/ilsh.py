@@ -147,6 +147,14 @@ class ILSH_Dataset(Dataset):
 				os.path.basename(scan_dir)
 				for scan_dir in sorted(glob.glob(os.path.join(self.root_dir, "*")))
 			]
+		
+		remove_list = []
+		for scan in self.scans:
+			if ".json" in scan:
+				remove_list.append(scan)
+		for cand in remove_list:
+			self.scans.remove(cand)
+
 
 		self.meta = []
 		self.image_paths = {}
@@ -172,7 +180,8 @@ class ILSH_Dataset(Dataset):
 			poses_val = poses_bounds_val[:, :15].reshape(-1, 3, 5)  # (N_images, 3, 5)
 			num_val = len(poses_val)
 			
-			bounds = np.concatenate((poses_bounds[:, -2:], poses_bounds_val[:, -2:]))  # (N_images, 2)
+			bounds = poses_bounds[:, -2:]  # (N_images, 2)
+			# bounds = np.concatenate((poses_bounds[:, -2:], poses_bounds_val[:, -2:]))  # (N_images, 2)
 
 			# Step 1: rescale focal length according to training resolution
 			H, W, focal = poses[0, :, -1]  # original intrinsics, same for all images
@@ -180,7 +189,7 @@ class ILSH_Dataset(Dataset):
 			focal = [focal * self.img_wh[0] / W, focal * self.img_wh[1] / H]
 
 			# Step 2: correct poses
-			poses = np.concatenate((poses, poses_val))
+			# poses = np.concatenate((poses, poses_val))
 			poses = np.concatenate(
 				[poses[..., 1:2], -poses[..., :1], poses[..., 2:4]], -1
 			)
@@ -195,9 +204,11 @@ class ILSH_Dataset(Dataset):
 
 			self.near_far[scan] = bounds.astype('float32')
 
-			num_viewpoint = len(self.image_paths[scan]) + num_val
-			# val_ids = [idx for idx in range(0, num_viewpoint, 8)]
-			val_ids = range(0, num_viewpoint)[-num_val:]
+			num_viewpoint = len(self.image_paths[scan])
+			# num_viewpoint = len(self.image_paths[scan]) + num_val
+			val_ids = [1]
+			# val_ids = [idx for idx in range(0, num_viewpoint, num_viewpoint - 1)]
+			# val_ids = range(0, num_viewpoint - 1)[-num_val:]
 			w, h = self.img_wh
 
 			self.id_list[scan] = []

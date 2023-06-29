@@ -1,11 +1,11 @@
 ### INPUT
-expname = origin_scale
+expname = fintine_0.25
 logdir = ./logs
 nb_views = 7  #### Set to 7 for fine-tuning
 
 ## dataset
 dataset_name = ilsh
-ilsh_path = /workspace/view-synthesis-challenge/data_root/devPhase/devPhase_01
+ilsh_path = /workspace/view-synthesis-challenge/data_root/devPhase/
 scene = 004_00
 downsample = 0.25
 
@@ -13,5 +13,5 @@ downsample = 0.25
 chunk = 4096  ### Reduce it to save memory
 
 ### TRAINING
-num_steps = 10000
+num_steps = 250000
 lrate = 0.0002

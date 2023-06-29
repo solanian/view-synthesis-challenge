@@ -30,39 +30,48 @@ from data.ilsh import ILSH_Dataset
 
 def get_training_dataset(args, downsample=1.0):
     train_datasets = [
-        DTU_Dataset(
-            original_root_dir=args.dtu_path,
-            preprocessed_root_dir=args.dtu_pre_path,
+        # DTU_Dataset(
+        #     original_root_dir=args.dtu_path,
+        #     preprocessed_root_dir=args.dtu_pre_path,
+        #     split="train",
+        #     max_len=-1,
+        #     downSample=downsample,
+        #     nb_views=args.nb_views,
+        # ),
+        # LLFF_Dataset(
+        #     root_dir=args.ibrnet1_path,
+        #     split="train",
+        #     max_len=-1,
+        #     downSample=downsample,
+        #     nb_views=args.nb_views,
+        #     imgs_folder_name="images",
+        # ),
+        # LLFF_Dataset(
+        #     root_dir=args.ibrnet2_path,
+        #     split="train",
+        #     max_len=-1,
+        #     downSample=downsample,
+        #     nb_views=args.nb_views,
+        #     imgs_folder_name="images",
+        # ),
+        # LLFF_Dataset(
+        #     root_dir=args.llff_path,
+        #     split="train",
+        #     max_len=-1,
+        #     downSample=downsample,
+        #     nb_views=args.nb_views,
+        #     imgs_folder_name="images",
+        #     # imgs_folder_name="images_4",
+        # ),
+		ILSH_Dataset(
+            root_dir=args.ilsh_path,
             split="train",
             max_len=-1,
             downSample=downsample,
             nb_views=args.nb_views,
-        ),
-        LLFF_Dataset(
-            root_dir=args.ibrnet1_path,
-            split="train",
-            max_len=-1,
-            downSample=downsample,
-            nb_views=args.nb_views,
-            imgs_folder_name="images",
-        ),
-        LLFF_Dataset(
-            root_dir=args.ibrnet2_path,
-            split="train",
-            max_len=-1,
-            downSample=downsample,
-            nb_views=args.nb_views,
-            imgs_folder_name="images",
-        ),
-        LLFF_Dataset(
-            root_dir=args.llff_path,
-            split="train",
-            max_len=-1,
-            downSample=downsample,
-            nb_views=args.nb_views,
-            imgs_folder_name="images",
-            # imgs_folder_name="images_4",
-        ),
+            # scene=args.scene,
+            imgs_folder_name="images_bg_remove",
+        )
     ]
     weights = [0.5, 0.22, 0.12, 0.16]
 
@@ -118,8 +127,7 @@ def get_finetuning_dataset(args, downsample=1.0):
             downSample=downsample,
             nb_views=args.nb_views,
             scene=args.scene,
-            imgs_folder_name="images",
-            # imgs_folder_name="images_4",
+            imgs_folder_name="images_bg_remove",
         )
 
     train_sampler = None
@@ -171,8 +179,7 @@ def get_validation_dataset(args, downsample=1.0):
             downSample=downsample,
             nb_views=args.nb_views,
             scene=args.scene,
-            imgs_folder_name="images",
-            # imgs_folder_name="images_4",
+            imgs_folder_name="images_bg_remove",
         )
 
     return val_dataset

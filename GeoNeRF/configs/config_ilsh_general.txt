@@ -1,0 +1,17 @@
+### INPUT
+expname = generalize_0.25
+logdir = ./logs
+nb_views = 9  #### Set to 7 for fine-tuning
+
+## dataset
+dataset_name = ilsh
+ilsh_path = /workspace/view-synthesis-challenge/data_root/devPhase/
+scene = None
+downsample = 0.25
+
+### TESTING
+chunk = 4096  ### Reduce it to save memory
+
+### TRAINING
+num_steps = 250000
+lrate = 0.0002
