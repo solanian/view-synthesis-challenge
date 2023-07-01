@@ -1,3 +1,7 @@
+#colab 확인
+
+https://github.com/solanian/view-synthesis-challenge/blob/main/TensoRF/off_tensorf.ipynb
+
 ###
 ```
 python train.py --config configs/test.txt 
