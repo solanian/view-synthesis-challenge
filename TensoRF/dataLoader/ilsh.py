@@ -210,9 +210,10 @@ class ILSHDataset(Dataset):
 		if self.split == 'train':
 			using_indices = list(set(np.arange(len(self.poses) - num_val)) - set(i_test))
 		elif self.split == 'test':
-			using_indices = i_test
-		else:
-			using_indices = list(np.arange(len(self.poses))[-num_val:])
+			if self.hold_every == -1:
+				using_indices = list(np.arange(len(self.poses))[-num_val:])
+			else:
+				using_indices = i_test
 
 		self.all_rays = []
 		self.all_rgbs = []
