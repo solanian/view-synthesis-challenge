@@ -119,7 +119,7 @@ def get_spiral(c2ws_all, near_fars, rads_scale=1.0, N_views=120):
 	return np.stack(render_poses)
 
 class ILSHDataset(Dataset):
-	def __init__(self, datadir, split='train', downsample=1.0, is_stack=False, hold_every=0):
+	def __init__(self, datadir, split='train', downsample=1.0, is_stack=False, hold_every=0, bg_remove=False):
 		"""
 		spheric_poses: whether the images are taken in a spheric inward-facing manner
 					default: False (forward-facing)
@@ -132,6 +132,7 @@ class ILSHDataset(Dataset):
 		self.is_stack = is_stack
 		self.downsample = downsample
 		self.define_transforms()
+		self.use_bg_remove = bg_remove
 
 		self.blender2opencv = np.eye(4)#np.array([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
 		self.read_meta()
@@ -147,7 +148,11 @@ class ILSHDataset(Dataset):
 	def read_meta(self):
 		poses_bounds = np.load(os.path.join(self.root_dir, 'poses_bounds_train.npy'))  # (N_images, 17)
 		poses_bounds_val = np.load(os.path.join(self.root_dir, "poses_bounds_val.npy")) # (N_images, 17)
-		self.image_paths = sorted(glob.glob(os.path.join(self.root_dir, 'images/*')))
+		if self.use_bg_remove:
+			self.image_paths = sorted(glob.glob(os.path.join(self.root_dir, 'images_bg_remove/*')))
+		else:
+			self.image_paths = sorted(glob.glob(os.path.join(self.root_dir, 'images/*')))
+		
 		# load full resolution image then resize
 		if self.split in ['train', 'test']:
 			assert len(poses_bounds) == len(self.image_paths), \
