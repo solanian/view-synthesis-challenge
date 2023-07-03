@@ -62,7 +62,7 @@ RUN git clone https://github.com/idiap/GeoNeRF.git
 WORKDIR /workspace/GeoNeRF
 RUN pip install -r requirements.txt
 
-RUN pip install gdown test-tube torchmetrics==0.6.0 scikit-image==0.16.2 wandb typing-extensions==4.6.3
+RUN pip install gdown test-tube torchmetrics==0.6.0 scikit-image==0.16.2 wandb typing-extensions==4.6.3 plyfile plotly kaleido
 
 # Install nvtop
 RUN git clone -b 2.0.4 https://github.com/Syllo/nvtop.git && \

@@ -3,11 +3,12 @@ from .blender import BlenderDataset
 from .nsvf import NSVF
 from .tankstemple import TanksTempleDataset
 from .your_own_data import YourOwnDataset
-
+from .ilsh import ILSHDataset
 
 
 dataset_dict = {'blender': BlenderDataset,
                'llff':LLFFDataset,
                'tankstemple':TanksTempleDataset,
                'nsvf':NSVF,
-                'own_data':YourOwnDataset}
+                'own_data':YourOwnDataset,
+                'ilsh':ILSHDataset}

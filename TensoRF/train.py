@@ -87,16 +87,11 @@ def render_test(args):
                                 N_vis=-1, N_samples=-1, white_bg = white_bg, ndc_ray=ndc_ray,device=device)
 
 def reconstruction(args):
-    print(0)
+
     # init dataset
     dataset = dataset_dict[args.dataset_name]
-    print(dataset)
     train_dataset = dataset(args.datadir, split='train', downsample=args.downsample_train, is_stack=False)
-    #print(args.datadir)
-    #train_dataset = dataset(args.datadir, split='train', downsample=1.0, is_stack=False)
-    print(train_dataset)
     test_dataset = dataset(args.datadir, split='test', downsample=args.downsample_train, is_stack=True)
-    print(3)
     white_bg = train_dataset.white_bg
     near_far = train_dataset.near_far
     ndc_ray = args.ndc_ray
