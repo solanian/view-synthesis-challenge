@@ -202,6 +202,8 @@ class ILSHDataset(Dataset):
 		# dists = np.sum(np.square(average_pose[:3, 3] - self.poses[:, :3, 3]), -1)
 		if self.hold_every == 0:
 			i_test = np.array([1])
+		elif self.hold_every == -1:
+			i_test = []
 		else:
 			i_test = np.arange(0, len(self.poses) - 1, self.hold_every)  # [np.argmin(dists)]
 		
