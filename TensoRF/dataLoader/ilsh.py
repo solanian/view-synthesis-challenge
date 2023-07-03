@@ -205,14 +205,14 @@ class ILSHDataset(Dataset):
 		elif self.hold_every == -1:
 			i_test = []
 		else:
-			i_test = np.arange(0, len(self.poses) - 1, self.hold_every)  # [np.argmin(dists)]
+			i_test = np.arange(0, len(self.poses) - num_val, self.hold_every)  # [np.argmin(dists)]
 		
 		if self.split == 'train':
-			using_indices = list(set(np.arange(len(self.poses) - 1)) - set(i_test))
+			using_indices = list(set(np.arange(len(self.poses) - num_val)) - set(i_test))
 		elif self.split == 'test':
 			using_indices = i_test
 		else:
-			using_indices = -1
+			using_indices = list(np.arange(len(self.poses))[-num_val:])
 
 		self.all_rays = []
 		self.all_rgbs = []
