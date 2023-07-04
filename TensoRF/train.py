@@ -112,18 +112,15 @@ def reconstruction(args):
     # init log file
     os.makedirs(logfolder, exist_ok=True)
     os.makedirs(f'{logfolder}/imgs_vis', exist_ok=True)
-    os.makedirs(f'{logfolder}/imgs_rgba', exist_ok=True)
-    os.makedirs(f'{logfolder}/rgba', exist_ok=True)
+    # os.makedirs(f'{logfolder}/imgs_rgba', exist_ok=True)
+    # os.makedirs(f'{logfolder}/rgba', exist_ok=True)
     summary_writer = SummaryWriter(logfolder)
-
-
 
     # init parameters
     # tensorVM, renderer = init_parameters(args, train_dataset.scene_bbox.to(device), reso_list[0])
     aabb = train_dataset.scene_bbox.to(device)
     reso_cur = N_to_reso(args.N_voxel_init, aabb)
     nSamples = min(args.nSamples, cal_n_samples(reso_cur,args.step_ratio))
-
 
     if args.ckpt is not None:
         ckpt = torch.load(args.ckpt, map_location=device)
