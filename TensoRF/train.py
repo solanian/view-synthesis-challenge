@@ -226,6 +226,7 @@ def reconstruction(args):
                 + f' train_psnr = {float(np.mean(PSNRs)):.2f}'
                 + f' test_psnr = {float(np.mean(PSNRs_test)):.2f}'
                 + f' mse = {loss:.6f}'
+                + f' cur resolution = [{reso_cur[0]} x {reso_cur[1]} x {reso_cur[2]}]'
             )
             PSNRs = []
 
