@@ -174,17 +174,14 @@ def reconstruction(args):
 
     pbar = tqdm(range(args.n_iters), miniters=args.progress_refresh_rate, file=sys.stdout)
     for iteration in pbar:
-
-
         ray_idx = trainingSampler.nextids()
         rays_train, rgb_train = allrays[ray_idx], allrgbs[ray_idx].to(device)
 
-        #rgb_map, alphas_map, depth_map, weights, uncertainty
+        # rgb_map, alphas_map, depth_map, weights, uncertainty
         rgb_map, alphas_map, depth_map, weights, uncertainty = renderer(rays_train, tensorf, chunk=args.batch_size,
                                 N_samples=nSamples, white_bg = white_bg, ndc_ray=ndc_ray, device=device, is_train=True)
 
         loss = torch.mean((rgb_map - rgb_train) ** 2)
-
 
         # loss
         total_loss = loss
@@ -232,13 +229,10 @@ def reconstruction(args):
             )
             PSNRs = []
 
-
         if iteration % args.vis_every == args.vis_every - 1 and args.N_vis!=0:
             PSNRs_test = evaluation(test_dataset,tensorf, args, renderer, f'{logfolder}/imgs_vis/', N_vis=args.N_vis,
-                                    prtx=f'{iteration:06d}_', N_samples=nSamples, white_bg = white_bg, ndc_ray=ndc_ray, compute_extra_metrics=False)
+                                    prtx=f'{iteration:06d}_', N_samples=nSamples, white_bg = white_bg, ndc_ray=ndc_ray, compute_extra_metrics=True)
             summary_writer.add_scalar('test/psnr', np.mean(PSNRs_test), global_step=iteration)
-
-
 
         if iteration in update_AlphaMask_list:
 
@@ -251,12 +245,10 @@ def reconstruction(args):
                 L1_reg_weight = args.L1_weight_rest
                 print("continuing L1_reg_weight", L1_reg_weight)
 
-
-            #if not args.ndc_ray and iteration == update_AlphaMask_list[1]:
+            # if not args.ndc_ray and iteration == update_AlphaMask_list[1]:
             #    # filter rays outside the bbox
             #    allrays,allrgbs = tensorf.filtering_rays(allrays,allrgbs)
             #    trainingSampler = SimpleSampler(allrgbs.shape[0], args.batch_size)
-
 
         if iteration in upsamp_list:
             n_voxels = N_voxel_list.pop(0)
@@ -271,10 +263,8 @@ def reconstruction(args):
                 lr_scale = args.lr_decay_target_ratio ** (iteration / args.n_iters)
             grad_vars = tensorf.get_optparam_groups(args.lr_init*lr_scale, args.lr_basis*lr_scale)
             optimizer = torch.optim.Adam(grad_vars, betas=(0.9, 0.99))
-        
 
     tensorf.save(f'{logfolder}/{args.expname}.th')
-
 
     if args.render_train:
         os.makedirs(f'{logfolder}/imgs_train_all', exist_ok=True)

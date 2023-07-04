@@ -1,6 +1,6 @@
 dataset_name = ilsh
-datadir = /workspace/view-synthesis-challenge/data_root/devPhase/004_00
-expname =  ilsh_test
+datadir = ../data_root/devPhase/004_00
+expname =  ilsh_test_upsamp
 basedir = ./log
 
 n_iters = 50000
@@ -8,13 +8,15 @@ batch_size = 4096
 
 N_voxel_init = 2097156 # 128**3
 N_voxel_final = 27000000 # 300**3
-upsamp_list = [2000,3000,4000,5500,7000]
+upsamp_list = [2000,3000,4000,5500,7000,8500,10000]
 update_AlphaMask_list = [2000,4000]
 
-N_vis = 5
-vis_every = 1000
+N_vis = 1
+vis_every = 5000
 
+render_train = 1
 render_test = 1
+render_path = 1
 
 n_lamb_sigma = [16,4,4]
 n_lamb_sh = [48,12,12]

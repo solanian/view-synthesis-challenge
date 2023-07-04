@@ -118,6 +118,7 @@ def get_spiral(c2ws_all, near_fars, rads_scale=1.0, N_views=120):
 	render_poses = render_path_spiral(c2w, up, rads, focal, zdelta, zrate=.5, N=N_views)
 	return np.stack(render_poses)
 
+
 class ILSHDataset(Dataset):
 	def __init__(self, datadir, split='train', downsample=1.0, is_stack=False, hold_every=0, bg_remove=False):
 		"""
@@ -174,7 +175,7 @@ class ILSHDataset(Dataset):
 		# Step 2: correct poses
 		# Original poses has rotation in form "down right back", change to "right up back"
 		# See https://github.com/bmild/nerf/issues/34
-		self.poses = np.concatenate((poses, poses_val))
+		poses = np.concatenate((poses, poses_val))
 		self.poses = np.concatenate([poses[..., 1:2], -poses[..., :1], poses[..., 2:4]], -1)
 		# (N_images, 3, 4) exclude H, W, focal
 		# self.poses, self.pose_avg = center_poses(poses, self.blender2opencv)
@@ -231,6 +232,8 @@ class ILSHDataset(Dataset):
 				if self.downsample != 1.0:
 					img = img.resize(self.img_wh, Image.LANCZOS)
 			else:
+				if self.split == 'train':
+					raise(FileNotFoundError(f"Image in train set: {image_path} not exist!"))
 				img = np.zeros((3, self.img_wh[1], self.img_wh[0]))
 			img = self.transform(img)  # (3, h, w)
 
@@ -248,16 +251,19 @@ class ILSHDataset(Dataset):
 		else:
 			self.all_rays = torch.stack(self.all_rays, 0)   # (len(self.meta['frames]),h,w, 3)
 			self.all_rgbs = torch.stack(self.all_rgbs, 0).reshape(-1,*self.img_wh[::-1], 3)  # (len(self.meta['frames]),h,w,3)
+		
+		self.mask = torch.where(torch.all(self.all_rgbs != torch.tensor([0., 0., 0.]), dim=1))[0]
 
 
 	def define_transforms(self):
 		self.transform = T.ToTensor()
 
 	def __len__(self):
-		return len(self.all_rgbs)
+		# return len(self.all_rgbs)
+		return len(self.mask)
 
 	def __getitem__(self, idx):
-
+		idx = self.mask[idx]
 		sample = {'rays': self.all_rays[idx],
 				'rgbs': self.all_rgbs[idx]}
 

@@ -7,11 +7,13 @@
 # train TensoRF
 
 ```
-python TensoRF/train.py --config TensoRF/configs/ilsh.txt
+cd TensoRF
+python train.py --config configs/ilsh.txt
 ```
 
 # train GeoNeRF
 
 ```
-python GeoNeRF/train.py --config GeoNeRF/configs/config_ilsh_finetune.txt
+cd GeoNeRF
+python train.py --config configs/config_ilsh_finetune.txt
 ```
