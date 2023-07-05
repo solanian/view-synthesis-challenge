@@ -249,7 +249,7 @@ class ILSHDataset(Dataset):
 		else:
 			self.all_rays = torch.stack(self.all_rays, 0)   # (len(self.meta['frames]),h,w, 3)
 			self.all_rgbs = torch.stack(self.all_rgbs, 0).reshape(-1,*self.img_wh[::-1], 3)  # (len(self.meta['frames]),h,w,3)
-		if self.use_bg_remove:
+		if self.use_bg_remove and self.split=="train" :
 			self.mask = torch.where(torch.all(self.all_rgbs != torch.tensor([0., 0., 0.]), dim=1))[0]
 
 
@@ -257,14 +257,14 @@ class ILSHDataset(Dataset):
 		self.transform = T.ToTensor()
 
 	def __len__(self):
-		if self.use_bg_remove:
+		if self.use_bg_remove and self.split=="train" :
 			return len(self.mask)
 		else:
 			return len(self.all_rgbs)
 		
 
 	def __getitem__(self, idx):
-		if self.use_bg_remove:
+		if self.use_bg_remove and self.split=="train" :
 			idx = self.mask[idx]
 		sample = {'rays': self.all_rays[idx],
 				'rgbs': self.all_rgbs[idx]}
