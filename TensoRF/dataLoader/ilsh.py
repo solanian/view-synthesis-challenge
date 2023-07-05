@@ -224,17 +224,15 @@ class ILSHDataset(Dataset):
 		self.all_rays = []
 		self.all_rgbs = []
 		for i in using_indices:
-			image_path = self.image_paths[i]
 			c2w = torch.FloatTensor(self.poses[i])
-
-			if os.path.exists(image_path):
+			if i not in range(len(self.image_paths)):
+				img = np.zeros((3, self.img_wh[1], self.img_wh[0]))
+			else:
+				image_path = self.image_paths[i]
 				img = Image.open(image_path).convert('RGB')
 				if self.downsample != 1.0:
 					img = img.resize(self.img_wh, Image.LANCZOS)
-			else:
-				if self.split == 'train':
-					raise(FileNotFoundError(f"Image in train set: {image_path} not exist!"))
-				img = np.zeros((3, self.img_wh[1], self.img_wh[0]))
+			
 			img = self.transform(img)  # (3, h, w)
 
 			img = img.view(3, -1).permute(1, 0)  # (h*w, 3) RGB
