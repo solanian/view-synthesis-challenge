@@ -93,8 +93,9 @@ if __name__=='__main__':
 	poses, file_paths = load_poses(transforms_train_path)
 	poses_val, file_paths_val = load_poses(transforms_val_path)
 
-	transforms_aug_path = os.path.join(args.in_dir, "transforms_aug.json")
-	poses_aug, file_paths_aug = load_poses(transforms_aug_path)
+	poses_bounds_aug = np.load(os.path.join(args.in_dir, "poses_bounds_aug.npy"))
+	poses_aug = poses_bounds_aug[:, :15].reshape(-1, 3, 5)  # (N_images, 3, 5)
+	poses_aug = np.concatenate([poses_aug[..., 1:2], -poses_aug[..., :1], poses_aug[..., 2:4]], -1)
 
 	blender2opencv = np.array([[1,  0,  0,  0], 
 							[0, -1,  0,  0],
@@ -150,14 +151,14 @@ if __name__=='__main__':
 									opacity=opacity)
 			fig.add_trace(scatter_3d)
 
-	for idx in range(0, len(file_paths_aug)):
+	for idx in range(0, len(poses_aug)):
 		pose_in_blender = poses_aug[idx]
 		pose_in_opencv = np.matmul(pose_in_blender, blender2opencv)
 		
 		cam_centre_x, cam_centre_y, cam_centre_z, tx, ty, tz \
 			= get_points_to_visualise_camera_axis (pose_in_opencv, x_=.1, y_=.1, z_=.1)
 
-		colors= ['cyan', 'cyan', 'cyan', 'cyan']
+		colors= ['blue', 'green', 'red', 'cyan']
 		for i_ in reversed(range(4)):
 			if (i_ < 3): mode = 'lines'; opacity=1
 			else:  mode = 'lines'; opacity=1
