@@ -266,7 +266,7 @@ if __name__=='__main__':
 	
 	aug_poses = []
 
-	for i in range(1):
+	for i in range(20):
 		aug_pose = random_camera_pose([min_elev, max_elev], [min_dist, max_dist])
 		aug_poses.append(np.append(np.column_stack((aug_pose, np.array([H, W, focal]))).reshape(-1), near_fars[0]))
 		min_ang_dist = sys.maxsize
