@@ -18,8 +18,6 @@ import sys
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-renderer = OctreeRender_trilinear_fast
-
 
 class SimpleSampler:
     def __init__(self, total, batch):
@@ -51,6 +49,9 @@ def export_mesh(args):
 
 @torch.no_grad()
 def render_test(args):
+    # init renderer
+    renderer = OctreeRender_trilinear_fast
+
     # init dataset
     dataset = dataset_dict[args.dataset_name]
     test_dataset = dataset(args.datadir, split='test', downsample=args.downsample_train, is_stack=True)
@@ -77,8 +78,9 @@ def render_test(args):
 
     if args.render_test:
         os.makedirs(f'{logfolder}/{args.expname}/imgs_test_all', exist_ok=True)
-        evaluation(test_dataset,tensorf, args, renderer, f'{logfolder}/{args.expname}/imgs_test_all/',
+        PSNRs_test = evaluation(test_dataset,tensorf, args, renderer, f'{logfolder}/{args.expname}/imgs_test_all/',
                                 N_vis=-1, N_samples=-1, white_bg = white_bg, ndc_ray=ndc_ray,device=device)
+        print(f'======> {args.expname} test all psnr: {np.mean(PSNRs_test)} <========================')
 
     if args.render_path:
         c2ws = test_dataset.render_path
@@ -86,7 +88,43 @@ def render_test(args):
         evaluation_path(test_dataset,tensorf, c2ws, renderer, f'{logfolder}/{args.expname}/imgs_path_all/',
                                 N_vis=-1, N_samples=-1, white_bg = white_bg, ndc_ray=ndc_ray,device=device)
 
+
+def visualization(args):
+    dataset = dataset_dict[args.dataset_name]
+    test_dataset = dataset(args.datadir, split='test', downsample=args.downsample_train, is_stack=True)
+    train_dataset = dataset(args.datadir, split='train', downsample=args.downsample_train, is_stack=True) #stack TRUE!!
+    white_bg = test_dataset.white_bg
+    ndc_ray = args.ndc_ray
+    if not os.path.exists(args.ckpt):
+        print('the ckpt path does not exists!!')
+        return
+
+    ckpt = torch.load(args.ckpt, map_location=device)
+    kwargs = ckpt['kwargs']
+    kwargs.update({'device': device})
+    tensorf = eval(args.model_name)(**kwargs)
+    tensorf.load(ckpt)
+
+    logfolder = os.path.dirname(args.ckpt)
+
+
+    csv_file_path = "one_cam_points_cloud.csv"
+    if os.path.exists(csv_file_path):
+        os.remove(csv_file_path)
+    PSNRs_test = evaluation(test_dataset, tensorf, args, OctreeRender_one_cam_3d_vis, f'{logfolder}/{args.expname}/imgs_vis3d_all/',
+                             N_vis=-1, N_samples=-1, white_bg=white_bg, ndc_ray=ndc_ray, device=device)
+    print(f'======> {args.expname} test all psnr: {np.mean(PSNRs_test)} <========================')
+
+    # csv_file_path = "multi_cam_points_cloud.csv"
+    # if os.path.exists(csv_file_path):
+    #     os.remove(csv_file_path)
+    # _ = evaluation(train_dataset, tensorf, args, OctreeRender_multi_cam_3d_vis, f'{logfolder}/{args.expname}/imgs_vis3d_all/',
+    #                         N_vis=-1, N_samples=-1, white_bg=white_bg, ndc_ray=ndc_ray, device=device)
+
+
 def reconstruction(args):
+    # init renderer
+    renderer = OctreeRender_trilinear_fast
 
     # init dataset
     dataset = dataset_dict[args.dataset_name]
@@ -288,7 +326,6 @@ def reconstruction(args):
 
 
 if __name__ == '__main__':
-
     torch.set_default_dtype(torch.float32)
     torch.manual_seed(20211202)
     np.random.seed(20211202)
@@ -301,6 +338,8 @@ if __name__ == '__main__':
 
     if args.render_only and (args.render_test or args.render_path):
         render_test(args)
+    elif args.render_visual:
+        visualization(args)
     else:
         reconstruction(args)
 

@@ -4,7 +4,8 @@ import torch.nn.functional as F
 from .sh import eval_sh_bases
 import numpy as np
 import time
-
+import random
+import csv
 
 def positional_encoding(positions, freqs):
     
@@ -157,6 +158,8 @@ class TensorBase(torch.nn.Module):
         self.fea2denseAct = fea2denseAct
 
         self.near_far = near_far
+        #self.near_far = [3.75,3.78]
+        print("@@@ near_far :{} ".format(self.near_far))  # before :3.5, 7.0
         self.step_ratio = step_ratio
 
 
@@ -419,6 +422,22 @@ class TensorBase(torch.nn.Module):
         else:
             xyz_sampled, z_vals, ray_valid = self.sample_ray(rays_chunk[:, :3], viewdirs, is_train=is_train,N_samples=N_samples)
             dists = torch.cat((z_vals[:, 1:] - z_vals[:, :-1], torch.zeros_like(z_vals[:, :1])), dim=-1)
+
+        if is_train == False:
+            point_clouds = []
+            ray_chunk_num = xyz_sampled.shape[0]
+            ray_sample_num = xyz_sampled.shape[1]
+            pix_idx = random.sample(list(range(ray_chunk_num)), 10)
+            ray_idx = random.sample(list(range(ray_sample_num)), 10)
+            for i in pix_idx:
+                for j in ray_idx:
+                    point_clouds.append([float(xyz_sampled[i][j][0]), float(xyz_sampled[i][j][1]), float(xyz_sampled[i][j][2]), 1,
+                                        1.0, 1.0, 0.0, "all_samples"])
+            csv_file_path = "one_cam_points_cloud.csv"
+            f = open(csv_file_path, 'a')
+            writer = csv.writer(f)
+            writer.writerows(point_clouds)
+            f.close()
         viewdirs = viewdirs.view(-1, 1, 3).expand(xyz_sampled.shape)
         
         if self.alphaMask is not None:
@@ -449,6 +468,7 @@ class TensorBase(torch.nn.Module):
             valid_rgbs = self.renderModule(xyz_sampled[app_mask], viewdirs[app_mask], app_features)
             rgb[app_mask] = valid_rgbs
 
+        vis_res = [xyz_sampled[app_mask], viewdirs[app_mask], rgb[app_mask]]
         acc_map = torch.sum(weight, -1)
         rgb_map = torch.sum(weight[..., None] * rgb, -2)
 
@@ -462,5 +482,5 @@ class TensorBase(torch.nn.Module):
             depth_map = torch.sum(weight * z_vals, -1)
             depth_map = depth_map + (1. - acc_map) * rays_chunk[..., -1]
 
-        return rgb_map, depth_map # rgb, sigma, alpha, weight, bg_weight
+        return rgb_map, depth_map, vis_res # rgb, sigma, alpha, weight, bg_weight
 

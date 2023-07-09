@@ -4,21 +4,104 @@ from dataLoader.ray_utils import get_rays
 from models.tensoRF import TensorVM, TensorCP, raw2alpha, TensorVMSplit, AlphaGridMask
 from utils import *
 from dataLoader.ray_utils import ndc_rays_blender
+import csv
 
-
-def OctreeRender_trilinear_fast(rays, tensorf, chunk=4096, N_samples=-1, ndc_ray=False, white_bg=True, is_train=False, device='cuda'):
+def OctreeRender_trilinear_fast(rays, tensorf, chunk=4096, N_samples=-1, ndc_ray=False, white_bg=True, is_train=False,
+                                img_wh=[0,0], device='cuda'):
 
     rgbs, alphas, depth_maps, weights, uncertainties = [], [], [], [], []
     N_rays_all = rays.shape[0]
+
     for chunk_idx in range(N_rays_all // chunk + int(N_rays_all % chunk > 0)):
         rays_chunk = rays[chunk_idx * chunk:(chunk_idx + 1) * chunk].to(device)
-    
-        rgb_map, depth_map = tensorf(rays_chunk, is_train=is_train, white_bg=white_bg, ndc_ray=ndc_ray, N_samples=N_samples)
+        rgb_map, depth_map, vis_res = tensorf(rays_chunk, is_train=is_train, white_bg=white_bg, ndc_ray=ndc_ray, N_samples=N_samples)
 
         rgbs.append(rgb_map)
         depth_maps.append(depth_map)
     
     return torch.cat(rgbs), None, torch.cat(depth_maps), None, None
+
+
+def OctreeRender_one_cam_3d_vis(rays, tensorf, chunk=4096, N_samples=-1, ndc_ray=False, white_bg=True, is_train=False,
+                                    img_wh=(0,0), device='cuda'):
+    rgbs, alphas, depth_maps, weights, uncertainties = [], [], [], [], []
+    N_rays_all = rays.shape[0]
+
+
+    print("OctreeRender_one_cam_3d_vis ray_shape : {}".format(rays.shape))
+    points_cloud = []
+    for chunk_idx in range(N_rays_all // chunk + int(N_rays_all % chunk > 0)):
+        rays_chunk = rays[chunk_idx * chunk:(chunk_idx + 1) * chunk].to(device)
+        rgb_map, depth_map, vis_res = tensorf(rays_chunk, is_train=is_train, white_bg=white_bg, ndc_ray=ndc_ray,
+                                              N_samples=N_samples)
+
+        rgbs.append(rgb_map)
+        depth_maps.append(depth_map)
+
+        # draw points over the weight threshold
+        xyz, viewdirs, rgb = vis_res
+        for idx in list(range(0, chunk, 1024)):
+            points_cloud.append([float(xyz[idx][0]), float(xyz[idx][1]), float(xyz[idx][2]), 1,
+                              float(rgb[idx][0]), float(rgb[idx][1]), float(rgb[idx][2]), "samples"])
+
+    # draw camera position
+    ray_o = rays[0,:3].tolist()
+    points_cloud.append([ray_o[0], ray_o[1], ray_o[2], 5, 1.0, 0, 0, "cam_loc"])
+
+    # draw frustum edges
+    for i in [0, img_wh[0]-1, N_rays_all-img_wh[0], N_rays_all-1]:
+        d = rays[i, 3:6].tolist()
+        for j in range(1,10):
+            points_cloud.append([ray_o[0]+d[0]*j, ray_o[1]+d[1]*j, ray_o[2]+d[2]*j, 1, 0, 1.0, 0, "view_dir"])
+
+    csv_file_path = "one_cam_points_cloud.csv"
+    f = open(csv_file_path, 'a')
+    writer = csv.writer(f)
+    writer.writerows(points_cloud)
+    f.close()
+
+    return torch.cat(rgbs), None, torch.cat(depth_maps), None, None
+
+def OctreeRender_multi_cam_3d_vis(rays, tensorf, chunk=4096, N_samples=-1, ndc_ray=False, white_bg=True, is_train=True,
+                                    img_wh=(0,0), device='cuda'): #is_train option is TRUE!!
+    rgbs, alphas, depth_maps, weights, uncertainties = [], [], [], [], []
+    N_rays_all = rays.shape[0]
+
+
+    print("OctreeRender_multi_cam_3d_vis ray_shape : {}".format(rays.shape))
+    points_cloud = []
+    for chunk_idx in range(N_rays_all // chunk + int(N_rays_all % chunk > 0)):
+        rays_chunk = rays[chunk_idx * chunk:(chunk_idx + 1) * chunk].to(device)
+        rgb_map, depth_map, vis_res = tensorf(rays_chunk, is_train=is_train, white_bg=white_bg, ndc_ray=ndc_ray,
+                                              N_samples=N_samples)
+
+        rgbs.append(rgb_map)
+        depth_maps.append(depth_map)
+
+        # draw points over the weight threshold
+        xyz, viewdirs, rgb = vis_res
+        for idx in list(range(0, chunk, 2047)):
+            points_cloud.append([float(xyz[idx][0]), float(xyz[idx][1]), float(xyz[idx][2]), 1,
+                              float(rgb[idx][0]), float(rgb[idx][1]), float(rgb[idx][2]), "samples"])
+
+    # draw camera position
+    ray_o = rays[0,:3].tolist()
+    points_cloud.append([ray_o[0], ray_o[1], ray_o[2], 5, 1.0, 0, 0, "cam_loc"])
+
+    # draw frustum edges
+    for i in [0, img_wh[0]-1, N_rays_all-img_wh[0], N_rays_all-1]:
+        d = rays[i, 3:6].tolist()
+        for j in range(1,10):
+            points_cloud.append([ray_o[0]+d[0]*j, ray_o[1]+d[1]*j, ray_o[2]+d[2]*j, 1, 0, 1.0, 0, "view_dir"])
+
+    csv_file_path = "multi_cam_points_cloud.csv"
+    f = open(csv_file_path, 'a')
+    writer = csv.writer(f)
+    writer.writerows(points_cloud)
+    f.close()
+
+    return torch.cat(rgbs), None, torch.cat(depth_maps), None, None
+
 
 @torch.no_grad()
 def evaluation(test_dataset,tensorf, args, renderer, savePath=None, N_vis=5, prtx='', N_samples=-1,
@@ -42,7 +125,8 @@ def evaluation(test_dataset,tensorf, args, renderer, savePath=None, N_vis=5, prt
         rays = samples.view(-1,samples.shape[-1])
 
         rgb_map, _, depth_map, _, _ = renderer(rays, tensorf, chunk=4096, N_samples=N_samples,
-                                        ndc_ray=ndc_ray, white_bg = white_bg, device=device)
+                                        ndc_ray=ndc_ray, white_bg=white_bg, img_wh=test_dataset.img_wh, device=device)
+
         rgb_map = rgb_map.clamp(0.0, 1.0)
 
         rgb_map, depth_map = rgb_map.reshape(H, W, 3).cpu(), depth_map.reshape(H, W).cpu()
@@ -141,4 +225,3 @@ def evaluation_path(test_dataset,tensorf, c2ws, renderer, savePath=None, N_vis=5
 
 
     return PSNRs
-

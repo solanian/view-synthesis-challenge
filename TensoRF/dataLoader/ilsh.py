@@ -212,7 +212,7 @@ class ILSHDataset(Dataset):
 			i_test = []
 		else:
 			i_test = np.arange(0, len(self.poses) - num_val, self.hold_every)  # [np.argmin(dists)]
-		
+
 		if self.split == 'train':
 			using_indices = list(set(np.arange(len(self.poses) - num_val)) - set(i_test))
 		elif self.split == 'test':
@@ -220,6 +220,7 @@ class ILSHDataset(Dataset):
 				using_indices = list(np.arange(len(self.poses))[-num_val:])
 			else:
 				using_indices = i_test
+		print("using_indeices:{}".format(using_indices))
 
 		self.all_rays = []
 		self.all_rgbs = []
@@ -249,9 +250,11 @@ class ILSHDataset(Dataset):
 		else:
 			self.all_rays = torch.stack(self.all_rays, 0)   # (len(self.meta['frames]),h,w, 3)
 			self.all_rgbs = torch.stack(self.all_rgbs, 0).reshape(-1,*self.img_wh[::-1], 3)  # (len(self.meta['frames]),h,w,3)
+		print("all_rgbs shape :{}, all_rays shape :{}".format(self.all_rgbs.shape, self.all_rays.shape))
+
 		if self.use_bg_remove and self.split=="train" :
 			self.mask = torch.where(torch.all(self.all_rgbs != torch.tensor([0., 0., 0.]), dim=1))[0]
-
+			print("mask shape :{}".format(self.mask.shape))
 
 	def define_transforms(self):
 		self.transform = T.ToTensor()
