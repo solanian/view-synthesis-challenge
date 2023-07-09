@@ -16,7 +16,7 @@ vis_every = 5000
 
 render_train = 1
 render_test = 1
-render_path = 1
+###render_path = 1
 
 n_lamb_sigma = [16,4,4]
 n_lamb_sh = [48,12,12]

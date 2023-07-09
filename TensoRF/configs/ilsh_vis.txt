@@ -21,7 +21,7 @@ render_visual = 1
 
 render_only = 1
 ckpt = ./log/ilsh_test_mask/ilsh_test_mask.th
-downsample_train = 2.0
+
 
 n_lamb_sigma = [16,4,4]
 n_lamb_sh = [48,12,12]
