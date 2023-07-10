@@ -439,21 +439,6 @@ class TensorBase(torch.nn.Module):
             xyz_sampled, z_vals, ray_valid = self.sample_ray(rays_chunk[:, :3], viewdirs, is_train=is_train,N_samples=N_samples)
             dists = torch.cat((z_vals[:, 1:] - z_vals[:, :-1], torch.zeros_like(z_vals[:, :1])), dim=-1)
 
-        if is_train == False:
-            point_clouds = []
-            ray_chunk_num = xyz_sampled.shape[0]
-            ray_sample_num = xyz_sampled.shape[1]
-            pix_idx = random.sample(list(range(ray_chunk_num)), 10)
-            ray_idx = random.sample(list(range(ray_sample_num)), 10)
-            for i in pix_idx:
-                for j in ray_idx:
-                    point_clouds.append([float(xyz_sampled[i][j][0]), float(xyz_sampled[i][j][1]), float(xyz_sampled[i][j][2]), 1,
-                                        1.0, 1.0, 0.0, "all_samples"])
-            csv_file_path = "one_cam_points_cloud.csv"
-            f = open(csv_file_path, 'a')
-            writer = csv.writer(f)
-            writer.writerows(point_clouds)
-            f.close()
         viewdirs = viewdirs.view(-1, 1, 3).expand(xyz_sampled.shape)
         
         if self.alphaMask is not None:
