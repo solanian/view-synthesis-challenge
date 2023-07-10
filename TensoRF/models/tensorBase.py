@@ -59,6 +59,59 @@ class AlphaGridMask(torch.nn.Module):
         return (xyz_sampled-self.aabb[0]) * self.invgridSize - 1
 
 
+class MLPRender_freenerf_Fea(torch.nn.Module):
+    def __init__(self, inChanel, viewpe=6, feape=6, featureC=128):
+        super(MLPRender_freenerf_Fea, self).__init__()
+        ## 채널을 바꾸는 것이 아니라 차원은 유지하고 포지셔널 인코딩 L에 따라 나머지 값들은 0처리
+        ## https://xoft.tistory.com/34
+        ## 최대 L 8까지 할계획
+        # self.in_mlpC = 2*viewpe*3 + 2*feape*inChanel + 3 + inChanel
+        self.in_mlpC = 2 * 8 * 3 + 2 * 8 * inChanel + 3 + inChanel
+
+        # self.inChanel=inChanel
+        self.viewpe = viewpe
+        self.feape = feape
+        # self.v_pe=None
+        # self.f_pe=None
+        # self.change_layerC()
+        layer1 = torch.nn.Linear(self.in_mlpC, featureC)
+        layer2 = torch.nn.Linear(featureC, featureC)
+        layer3 = torch.nn.Linear(featureC, 3)
+
+        self.mlp = torch.nn.Sequential(layer1, torch.nn.ReLU(inplace=True), layer2, torch.nn.ReLU(inplace=True), layer3)
+        torch.nn.init.constant_(self.mlp[-1].bias, 0)
+
+    def forward(self, pts, viewdirs, features, v_pe=0, f_pe=0):
+        # v_pe = v_pe  # Assign v_pe value from forward method to self.v_pe
+        # f_pe = f_pe  # Assign f_pe value from forward method to self.f_pe
+        indata = [features, viewdirs]
+        # if self.f_pe > 0:
+        # f_pe=self.f_pe
+        indata += [positional_encoding(features, 8)]
+        # 108 차이
+        # 2일때 torch.Size([369824, 108])
+        # 4일때 torch.Size([369824, 216])
+        # 6일때 torch.Size([369824, 324])
+        # 8일때 torch.Size([369824, 432])
+        indata[2][:, (f_pe // 2) * 108:] = 0
+        indata += [positional_encoding(viewdirs, 8)]
+        # indata[int(v_pe*0.1*4)+2:]=[0]
+        # 12차이
+        # 2일때 torch.Size([369824, 12])
+        # 4일때 torch.Size([369824, 24])
+        # 6일때
+        # 8일때 torch.Size([369824, 48])
+        indata[3][:, (v_pe // 2) * 12:] = 0
+
+        print(f_pe, v_pe)
+
+        mlp_in = torch.cat(indata, dim=-1)
+        rgb = self.mlp(mlp_in)
+        rgb = torch.sigmoid(rgb)
+
+        return rgb
+
+
 class MLPRender_Fea(torch.nn.Module):
     def __init__(self,inChanel, viewpe=6, feape=6, featureC=128):
         super(MLPRender_Fea, self).__init__()
@@ -181,6 +234,8 @@ class TensorBase(torch.nn.Module):
             self.renderModule = MLPRender_PE(self.app_dim, view_pe, pos_pe, featureC).to(device)
         elif shadingMode == 'MLP_Fea':
             self.renderModule = MLPRender_Fea(self.app_dim, view_pe, fea_pe, featureC).to(device)
+        elif shadingMode == 'MLP_freenerf_Fea':
+            self.renderModule = MLPRender_freenerf_Fea(self.app_dim, view_pe, fea_pe, featureC).to(device)
         elif shadingMode == 'MLP':
             self.renderModule = MLPRender(self.app_dim, view_pe, featureC).to(device)
         elif shadingMode == 'SH':
@@ -425,8 +480,7 @@ class TensorBase(torch.nn.Module):
         return alpha
 
 
-    def forward(self, rays_chunk, white_bg=True, is_train=False, ndc_ray=False, N_samples=-1):
-
+    def forward(self, rays_chunk, white_bg=True, is_train=False, ndc_ray=False, N_samples=-1, train_iter=0):
         # sample points
         viewdirs = rays_chunk[:, 3:6]
         if ndc_ray:
@@ -466,7 +520,22 @@ class TensorBase(torch.nn.Module):
 
         if app_mask.any():
             app_features = self.compute_appfeature(xyz_sampled[app_mask])
-            valid_rgbs = self.renderModule(xyz_sampled[app_mask], viewdirs[app_mask], app_features)
+            if self.shadingMode == 'MLP_freenerf_Fea':
+                ### increase the number of positional encoding
+                if train_iter > 40000:
+                    view_pe, fea_pe = 8, 8
+                elif train_iter > 30000:
+                    view_pe, fea_pe = 6, 6
+                elif train_iter > 20000:
+                    view_pe, fea_pe = 4, 4
+                elif train_iter > 10000:
+                    view_pe, fea_pe = 2, 2
+                else:
+                    view_pe, fea_pe = 0, 0
+                valid_rgbs = self.renderModule(xyz_sampled[app_mask], viewdirs[app_mask], app_features,
+                                               v_pe=view_pe, f_pe=fea_pe)
+            else:
+                valid_rgbs = self.renderModule(xyz_sampled[app_mask], viewdirs[app_mask], app_features)
             rgb[app_mask] = valid_rgbs
 
         vis_res = [xyz_sampled[app_mask], viewdirs[app_mask], rgb[app_mask]]
@@ -484,4 +553,8 @@ class TensorBase(torch.nn.Module):
             depth_map = depth_map + (1. - acc_map) * rays_chunk[..., -1]
 
         return rgb_map, depth_map, vis_res # rgb, sigma, alpha, weight, bg_weight
+
+
+
+
 

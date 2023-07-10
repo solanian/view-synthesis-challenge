@@ -7,14 +7,15 @@ from dataLoader.ray_utils import ndc_rays_blender
 import csv
 
 def OctreeRender_trilinear_fast(rays, tensorf, chunk=4096, N_samples=-1, ndc_ray=False, white_bg=True, is_train=False,
-                                img_wh=[0,0], device='cuda'):
+                                img_wh=[0,0], train_iter=0, device='cuda'):
 
     rgbs, alphas, depth_maps, weights, uncertainties = [], [], [], [], []
     N_rays_all = rays.shape[0]
 
     for chunk_idx in range(N_rays_all // chunk + int(N_rays_all % chunk > 0)):
         rays_chunk = rays[chunk_idx * chunk:(chunk_idx + 1) * chunk].to(device)
-        rgb_map, depth_map, vis_res = tensorf(rays_chunk, is_train=is_train, white_bg=white_bg, ndc_ray=ndc_ray, N_samples=N_samples)
+        rgb_map, depth_map, vis_res = tensorf(rays_chunk, is_train=is_train, white_bg=white_bg, ndc_ray=ndc_ray,
+                                              N_samples=N_samples, train_iter=train_iter)
 
         rgbs.append(rgb_map)
         depth_maps.append(depth_map)
@@ -23,7 +24,7 @@ def OctreeRender_trilinear_fast(rays, tensorf, chunk=4096, N_samples=-1, ndc_ray
 
 
 def OctreeRender_one_cam_3d_vis(rays, tensorf, chunk=4096, N_samples=-1, ndc_ray=False, white_bg=True, is_train=False,
-                                    img_wh=(0,0), device='cuda'):
+                                    img_wh=(0,0), train_iter=0, device='cuda'):
     rgbs, alphas, depth_maps, weights, uncertainties = [], [], [], [], []
     N_rays_all = rays.shape[0]
 
@@ -33,7 +34,7 @@ def OctreeRender_one_cam_3d_vis(rays, tensorf, chunk=4096, N_samples=-1, ndc_ray
     for chunk_idx in range(N_rays_all // chunk + int(N_rays_all % chunk > 0)):
         rays_chunk = rays[chunk_idx * chunk:(chunk_idx + 1) * chunk].to(device)
         rgb_map, depth_map, vis_res = tensorf(rays_chunk, is_train=is_train, white_bg=white_bg, ndc_ray=ndc_ray,
-                                              N_samples=N_samples)
+                                              N_samples=N_samples, train_iter=train_iter)
 
         rgbs.append(rgb_map)
         depth_maps.append(depth_map)
@@ -64,7 +65,7 @@ def OctreeRender_one_cam_3d_vis(rays, tensorf, chunk=4096, N_samples=-1, ndc_ray
     return torch.cat(rgbs), None, torch.cat(depth_maps), None, None
 
 def OctreeRender_multi_cam_3d_vis(rays, tensorf, chunk=4096, N_samples=-1, ndc_ray=False, white_bg=True, is_train=True,
-                                    img_wh=(0,0), device='cuda'): #is_train option is TRUE!!
+                                    img_wh=(0,0), train_iter=0, device='cuda'): #is_train option is TRUE!!
     rgbs, alphas, depth_maps, weights, uncertainties = [], [], [], [], []
     N_rays_all = rays.shape[0]
 
@@ -74,7 +75,7 @@ def OctreeRender_multi_cam_3d_vis(rays, tensorf, chunk=4096, N_samples=-1, ndc_r
     for chunk_idx in range(N_rays_all // chunk + int(N_rays_all % chunk > 0)):
         rays_chunk = rays[chunk_idx * chunk:(chunk_idx + 1) * chunk].to(device)
         rgb_map, depth_map, vis_res = tensorf(rays_chunk, is_train=is_train, white_bg=white_bg, ndc_ray=ndc_ray,
-                                              N_samples=N_samples)
+                                              N_samples=N_samples, train_iter=train_iter)
 
         rgbs.append(rgb_map)
         depth_maps.append(depth_map)
