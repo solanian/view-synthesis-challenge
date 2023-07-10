@@ -49,9 +49,10 @@ def OctreeRender_one_cam_3d_vis(rays, tensorf, chunk=4096, N_samples=-1, ndc_ray
     points_cloud.append([ray_o[0], ray_o[1], ray_o[2], 5, 1.0, 0, 0, "cam_loc"])
 
     # draw frustum edges
+    near_far = tensorf.near_far
     for i in [0, img_wh[0]-1, N_rays_all-img_wh[0], N_rays_all-1]:
         d = rays[i, 3:6].tolist()
-        for j in range(1,10):
+        for j in [near_far[0], near_far[1]]:
             points_cloud.append([ray_o[0]+d[0]*j, ray_o[1]+d[1]*j, ray_o[2]+d[2]*j, 1, 0, 1.0, 0, "view_dir"])
 
     csv_file_path = "one_cam_points_cloud.csv"
@@ -86,12 +87,13 @@ def OctreeRender_multi_cam_3d_vis(rays, tensorf, chunk=4096, N_samples=-1, ndc_r
 
     # draw camera position
     ray_o = rays[0,:3].tolist()
-    points_cloud.append([ray_o[0], ray_o[1], ray_o[2], 5, 1.0, 0, 0, "cam_loc"])
+    points_cloud.append([ray_o[0], ray_o[1], ray_o[2], 10.0, 1.0, 0, 0, "cam_loc"])
 
     # draw frustum edges
+    near_far = tensorf.near_far
     for i in [0, img_wh[0]-1, N_rays_all-img_wh[0], N_rays_all-1]:
         d = rays[i, 3:6].tolist()
-        for j in range(1,10):
+        for j in [near_far[0], near_far[1]]:
             points_cloud.append([ray_o[0]+d[0]*j, ray_o[1]+d[1]*j, ray_o[2]+d[2]*j, 1, 0, 1.0, 0, "view_dir"])
 
     csv_file_path = "multi_cam_points_cloud.csv"
