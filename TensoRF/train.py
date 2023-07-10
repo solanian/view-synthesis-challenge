@@ -1,4 +1,4 @@
-
+# -*- coding: utf-8 -*-
 import os
 from tqdm.auto import tqdm
 from opt import config_parser
@@ -157,8 +157,21 @@ def reconstruction(args):
     # init parameters
     # tensorVM, renderer = init_parameters(args, train_dataset.scene_bbox.to(device), reso_list[0])
     aabb = train_dataset.scene_bbox.to(device)
-    reso_cur = N_to_reso(args.N_voxel_init, aabb)
-    nSamples = min(args.nSamples, cal_n_samples(reso_cur,args.step_ratio))
+    # print("aabb:{}".format(aabb)) #[-1.5000, -1.6700, -1.0000,  1.5000,  1.6700,  1.0000],
+    reso_cur = N_to_reso(args.N_voxel_init, aabb) #내부에서 계산하는 voxel size = 0.0212204
+    # print("args.N_voxel_init:{}".format(args.N_voxel_init)) #128x128x128
+    # print("reso_cur:{}".format(reso_cur)) #[141,157,94] ### voxel_size * reso_cur = aabb width
+
+    nSamples = min(args.nSamples, cal_n_samples(reso_cur,args.step_ratio)) #reso_cur의 mean_square값 / step_ratio
+    # print("args.step_ratio:{}".format(args.step_ratio)) #0.5
+    # print("args.nSamples:{}".format(args.nSamples)) #1000000
+    # print("nSamples:{}".format(nSamples) )#462
+    # [초기값]
+    # aabb = [-1.5000, -1.6700, -1.0000,  1.5000,  1.6700,  1.0000]
+    # grid갯수 = 128x128x128
+    # grid별 해상도(reso_cur)= [141, 157, 94]
+    # voxel 크기 = 0.021122
+    # ray마다 sample갯수(nSamples) = 462
 
     if args.ckpt is not None:
         ckpt = torch.load(args.ckpt, map_location=device)
@@ -214,7 +227,8 @@ def reconstruction(args):
 
         # rgb_map, alphas_map, depth_map, weights, uncertainty
         rgb_map, alphas_map, depth_map, weights, uncertainty = renderer(rays_train, tensorf, chunk=args.batch_size,
-                                N_samples=nSamples, white_bg = white_bg, ndc_ray=ndc_ray, device=device, is_train=True)
+                                N_samples=nSamples, white_bg = white_bg, ndc_ray=ndc_ray, device=device, is_train=True,
+                                train_iter=iteration)
 
         loss = torch.mean((rgb_map - rgb_train) ** 2)
 
