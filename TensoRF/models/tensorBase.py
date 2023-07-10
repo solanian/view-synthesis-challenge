@@ -103,7 +103,7 @@ class MLPRender_freenerf_Fea(torch.nn.Module):
         # 8일때 torch.Size([369824, 48])
         indata[3][:, (v_pe // 2) * 12:] = 0
 
-        print(f_pe, v_pe)
+        # print(f_pe, v_pe)
 
         mlp_in = torch.cat(indata, dim=-1)
         rgb = self.mlp(mlp_in)
