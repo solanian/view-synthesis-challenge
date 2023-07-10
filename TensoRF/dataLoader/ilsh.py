@@ -120,7 +120,7 @@ def get_spiral(c2ws_all, near_fars, rads_scale=1.0, N_views=120):
 
 
 class ILSHDataset(Dataset):
-	def __init__(self, datadir, split='train', downsample=1.0, is_stack=False, hold_every=0, bg_remove=True, is_ndc=False):
+	def __init__(self, datadir, split='train', downsample=1.0, is_stack=False, hold_every=-1, bg_remove=True, is_ndc=False, use_aug_pose=False):
 		"""
 		spheric_poses: whether the images are taken in a spheric inward-facing manner
 					default: False (forward-facing)
@@ -135,6 +135,7 @@ class ILSHDataset(Dataset):
 		self.define_transforms()
 		self.use_bg_remove = bg_remove
 		self.is_ndc = is_ndc
+		self.use_aug_pose = use_aug_pose
 
 		self.blender2opencv = np.eye(4)#np.array([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
 		self.read_meta()
@@ -159,12 +160,16 @@ class ILSHDataset(Dataset):
 		else:
 			self.image_paths = sorted(glob.glob(os.path.join(self.root_dir, 'images/*')))
 		
+
 		# load full resolution image then resize
 		if self.split in ['train', 'test']:
 			assert len(poses_bounds) == len(self.image_paths), \
 				'Mismatch between number of images and number of poses! Please rerun COLMAP!'
 
+		
+
 		poses = poses_bounds[:, :15].reshape(-1, 3, 5)  # (N_images, 3, 5)
+		
 		poses_val = poses_bounds_val[:, :15].reshape(-1, 3, 5)  # (N_images, 3, 5)
 		num_val = len(poses_val)
 
@@ -180,6 +185,12 @@ class ILSHDataset(Dataset):
 		# Step 2: correct poses
 		# Original poses has rotation in form "down right back", change to "right up back"
 		# See https://github.com/bmild/nerf/issues/34
+		if self.use_aug_pose:
+			poses_bounds_aug = np.load(os.path.join(self.root_dir, 'poses_bounds_aug.npy'))  # (N_images, 17)
+			self.image_paths_aug = sorted(glob.glob(os.path.join(self.root_dir, 'images_aug/*')))
+			self.image_paths.extend(self.image_paths_aug)
+			poses_aug = poses_bounds_aug[:, :15].reshape(-1, 3, 5)  # (N_images, 3, 5)
+			poses = np.concatenate((poses, poses_aug))
 		poses = np.concatenate((poses, poses_val))
 		self.poses = np.concatenate([poses[..., 1:2], -poses[..., :1], poses[..., 2:4]], -1)
 		# (N_images, 3, 4) exclude H, W, focal
@@ -225,7 +236,7 @@ class ILSHDataset(Dataset):
 				using_indices = list(np.arange(len(self.poses))[-num_val:])
 			else:
 				using_indices = i_test
-		print("using_indeices:{}".format(using_indices))
+		print("using_indices:{}".format(using_indices))
 
 		self.all_rays = []
 		self.all_rgbs = []

@@ -33,7 +33,10 @@ def rotation_quaternion(roll, pitch, yaw):
 	return q
 
 
-def warp_image(image, T, K):
+def warp_image(image, C1, C2, K):
+	# Step 1: Find transformation matrix
+	T = np.dot(np.linalg.pinv(C1), C2)
+    
 	# Step 2: Get 2D pixel coordinates (homogeneous coordinates)
 	h, w = image.shape[:2]
 	x, y = np.meshgrid(range(w), range(h))
@@ -42,10 +45,7 @@ def warp_image(image, T, K):
 	
 	# Step 3: Unproject 2D points to 3D points
 	P3D = np.dot(np.linalg.inv(K), P2D)
-	
-	tmp_rot = np.eye(4)
-	tmp_rot[:3,:3] = T
-	T = tmp_rot
+
 
 	# Step 4: Apply the transformation to the 3D points
 	P3D_t = np.dot(T, np.vstack((P3D, np.ones_like(P3D[0]))))[:3] / P3D[2]
@@ -61,42 +61,6 @@ def warp_image(image, T, K):
 	warped_image = cv2.warpPerspective(image, H, (w, h))
 
 	return warped_image
-
-def create_projection_matrix(intrinsics, pose):
-	T = np.eye(4)
-	T[:3, :3] = pose[:3, :3]
-	T[:3, 3] = pose[:3, 3]
-
-	return intrinsics.dot(T[:3, [0, 1, 3]])
-
-def warp_image(img, source_pose, target_pose, intrinsics):
-	height, width, _ = img.shape
-
-	# Create source and target projection matrices
-	source_P = create_projection_matrix(intrinsics, source_pose)
-	target_P = create_projection_matrix(intrinsics, target_pose)
-
-	# Compute the inverse of the source projection matrix
-	source_P_inv = np.linalg.pinv(source_P)
-
-	# Create an empty (black) output image
-	warped_img = np.zeros_like(img)
-
-	for x in range(width):
-		for y in range(height):
-			# Project the pixel coordinate (x, y) to 3D space by raytracing
-			pixel_source = np.array([x, y, 1])
-			ray_source = np.dot(source_P_inv, pixel_source)
-
-			# Project this 3D coordinate onto the target image
-			pixel_target = np.dot(target_P, ray_source)
-			pixel_target = (pixel_target[:2] / pixel_target[2]).astype(int)
-
-			# Check if the point lies within the image boundaries
-			if 0 <= pixel_target[0] < width and 0 <= pixel_target[1] < height:
-				warped_img[pixel_target[1], pixel_target[0]] = img[y, x]
-
-	return warped_img
 
 def get_points_to_visualise_camera_axis (pose_, x_=.1, y_=.1, z_=.1):
 	pt_o = np.matmul(pose_, [  0,  0,  0,  1])
@@ -139,30 +103,6 @@ def random_camera_pose(elevation_range, distance_range):
 	up_vec = np.array([0, 1, 0])
 	left_vec = np.cross(up_vec, look_at_dir)
 	left_vec /= np.linalg.norm(left_vec)
-	
-	# Create a 90-degree clockwise rotation matrix around the look_at_dir
-	rotation_angle = np.radians(-90)
-	rotation_matrix = np.array([[np.cos(rotation_angle) + look_at_dir[0] ** 2 * (1 - np.cos(rotation_angle)),
-								look_at_dir[0] * look_at_dir[1] * (1 - np.cos(rotation_angle)) -
-								look_at_dir[2] * np.sin(rotation_angle),
-								look_at_dir[0] * look_at_dir[2] * (1 - np.cos(rotation_angle)) +
-								look_at_dir[1] * np.sin(rotation_angle)],
-
-								[look_at_dir[1] * look_at_dir[0] * (1 - np.cos(rotation_angle)) +
-								look_at_dir[2] * np.sin(rotation_angle),
-								np.cos(rotation_angle) + look_at_dir[1] ** 2 * (1 - np.cos(rotation_angle)),
-								look_at_dir[1] * look_at_dir[2] * (1 - np.cos(rotation_angle)) -
-								look_at_dir[0] * np.sin(rotation_angle)],
-
-								[look_at_dir[2] * look_at_dir[0] * (1 - np.cos(rotation_angle)) -
-								look_at_dir[1] * np.sin(rotation_angle),
-								look_at_dir[2] * look_at_dir[1] * (1 - np.cos(rotation_angle)) +
-								look_at_dir[0] * np.sin(rotation_angle),
-								np.cos(rotation_angle) + look_at_dir[2] ** 2 * (1 - np.cos(rotation_angle))]])
-
-	# Apply the rotation matrix
-	left_vec = np.dot(rotation_matrix, left_vec)
-	up_vec = np.dot(rotation_matrix, up_vec)
 	
 	# Assemble the 3x4 transformation matrix
 	pose_matrix = np.zeros((3, 4))
@@ -224,7 +164,7 @@ def angle_between_points(p1, p2, origin=np.array([0, 0, 0])):
 	# Calculate the angle between the two vectors using the acos function
 	angle_rad = np.arccos(np.clip(dot_product, -1, 1))  # Clip to handle floating-point inaccuracies
 
-	return angle_rad
+	return np.rad2deg(angle_rad)
 
 def parse_args():
 	parser = argparse.ArgumentParser()
@@ -266,26 +206,30 @@ if __name__=='__main__':
 	
 	aug_poses = []
 
-	for i in range(20):
+	gen_num = 80
+	gen_cnt = 0
+	
+	while True:
+		if gen_cnt == gen_num:
+			break
 		aug_pose = random_camera_pose([min_elev, max_elev], [min_dist, max_dist])
-		aug_poses.append(np.append(np.column_stack((aug_pose, np.array([H, W, focal]))).reshape(-1), near_fars[0]))
 		min_ang_dist = sys.maxsize
 		min_idx = 0
 		for ii, pose_dict in enumerate(pose_dicts):
 			ang_dist = angle_between_points(pose_dict['pose'][:, 3], aug_pose[:, 3])
-			if ang_dist < min_ang_dist:
-				min_ang_dist = ang_dist
-				min_idx = ii
+			if ang_dist > 0:
+				if ang_dist < min_ang_dist:
+					min_ang_dist = ang_dist
+					min_idx = ii
+		if min_ang_dist > 3:
+			continue
 		img = cv2.imread(image_paths[min_idx])
-		warped_img = warp_image(img, poses[min_idx], aug_pose, pixtocams)
-		print(np.max(img))
-		print(np.max(warped_img))
-		cv2.imwrite('warped.png', warped_img)
-		cv2.imwrite('origin.png', img)
+		warped_img = warp_image(img, poses[min_idx], aug_pose, np.linalg.inv(pixtocams))
+		file_name = str(Path(image_paths[min_idx]).parent.parent / Path('images_aug') / Path(image_paths[min_idx]).name.split('.')[0].split('_')[0]) + f'_00_{gen_cnt:02}.png'
+		os.makedirs(str(Path(image_paths[min_idx]).parent.parent / Path('images_aug')), exist_ok=True)
+		cv2.imwrite(file_name, warped_img)
+		aug_poses.append(np.append(np.column_stack((aug_pose, np.array([H, W, focal]))).reshape(-1), near_fars[0]))
+		print(file_name)
+		gen_cnt += 1
 	aug_poses = np.stack(aug_poses, axis=0)
 	np.save(os.path.join(args.in_dir, "poses_bounds_aug.npy"), aug_poses)
-
-	# q = rotation_quaternion(config.aug_roll, config.aug_pitch, config.aug_yaw)
-
-	# warped_image = warp_image(image, np.linalg.inv(q.rotation_matrix), np.linalg.inv(test_dataset.pixtocams))
-
