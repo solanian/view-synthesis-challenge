@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import torch
 import torch.nn
 import torch.nn.functional as F
@@ -199,8 +200,9 @@ class TensorBase(torch.nn.Module):
         self.aabbSize = self.aabb[1] - self.aabb[0]
         self.invaabbSize = 2.0/self.aabbSize
         self.gridSize= torch.LongTensor(gridSize).to(self.device)
-        self.units=self.aabbSize / (self.gridSize-1)
-        self.stepSize=torch.mean(self.units)*self.step_ratio
+        self.units=self.aabbSize / (self.gridSize-1) # aabb x,y,z각너비 / grid_size ### gridsize는 configs에서 N_voxel_init
+                                                     # 부터 N_voxel_final까지 커짐 (128->300)
+        self.stepSize=torch.mean(self.units)*self.step_ratio #step_ratio는 configs에서 설정. opt.py에 0.5로 되어 있음
         self.aabbDiag = torch.sqrt(torch.sum(torch.square(self.aabbSize)))
         self.nSamples=int((self.aabbDiag / self.stepSize).item()) + 1
         print("sampling step size: ", self.stepSize)
@@ -281,20 +283,34 @@ class TensorBase(torch.nn.Module):
         N_samples = N_samples if N_samples>0 else self.nSamples
         stepsize = self.stepSize
         near, far = self.near_far
-        vec = torch.where(rays_d==0, torch.full_like(rays_d, 1e-6), rays_d)
+
+        ### bound 시작a, 종료b 좌표에 대해, world좌표계를 camera좌표계로 변형
+        vec = torch.where(rays_d==0, torch.full_like(rays_d, 1e-6), rays_d) #rays_d의 최소값이 0.000001이 되도록 변경
         rate_a = (self.aabb[1] - rays_o) / vec
         rate_b = (self.aabb[0] - rays_o) / vec
-        t_min = torch.minimum(rate_a, rate_b).amax(-1).clamp(min=near, max=far)
+        aaa = torch.minimum(rate_a, rate_b) #bound 시작a, 종료b 좌표 둘중에 x,y,z각각 가장 작은 좌표 획득
+        bbb = aaa.amax(-1) #각 point의 x,y,z중에서 가장 큰 값 획득
+        t_min = bbb.clamp(min=near, max=far) # init함수에서 self.near_far로 설정한 범위보다 크거나 작지않게 변경
+        # print(rays_o.shape, self.aabb.shape, t_min.shape) # (4096,3) , (2,3), (4096)
 
+        ### sample the depth z
         rng = torch.arange(N_samples)[None].float()
         if is_train:
             rng = rng.repeat(rays_d.shape[-2],1)
             rng += torch.rand_like(rng[:,[0]])
         step = stepsize * rng.to(rays_o.device)
-        interpx = (t_min[...,None] + step)
+                # step : N_samples(1개 ray위의 sample수)만큼 step_size(sample point간 z 거리) 간격을 가진 배열
+                # step간격이 커짐 : aabb 너비가 클수록, gridSize가 작아질수록, step_ratio가 커질수록 (update_stepSize함수 참조)
+        interpx = (t_min[...,None] + step) # near에서부터 step간격만큼을 z값으로 획득 (far의 범위를 넘기도 함)
 
+
+        ### 3차원 sampling좌표값을 획득 : sample points를 camera좌표계에서 world좌표계로 변경
         rays_pts = rays_o[...,None,:] + rays_d[...,None,:] * interpx[...,None]
+
+        ### bound 밖에 위치 할 경우, 1인 array를 획득
         mask_outbbox = ((self.aabb[0]>rays_pts) | (rays_pts>self.aabb[1])).any(dim=-1)
+        #print(rays_pts.shape, interpx.shape, mask_outbbox.shape) # (4096, 459, 3), (4096, 459) , (4096, 459) <-example
+
 
         return rays_pts, interpx, ~mask_outbbox
 
