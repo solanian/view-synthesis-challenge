@@ -120,7 +120,7 @@ def get_spiral(c2ws_all, near_fars, rads_scale=1.0, N_views=120):
 
 
 class ILSHDataset(Dataset):
-	def __init__(self, datadir, split='train', downsample=1.0, is_stack=False, hold_every=0, bg_remove=True):
+	def __init__(self, datadir, split='train', downsample=1.0, is_stack=False, hold_every=0, bg_remove=True, is_ndc=False):
 		"""
 		spheric_poses: whether the images are taken in a spheric inward-facing manner
 					default: False (forward-facing)
@@ -134,13 +134,18 @@ class ILSHDataset(Dataset):
 		self.downsample = downsample
 		self.define_transforms()
 		self.use_bg_remove = bg_remove
+		self.is_ndc = is_ndc
 
 		self.blender2opencv = np.eye(4)#np.array([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
 		self.read_meta()
 		self.white_bg = False
 
 		#         self.near_far = [np.min(self.near_fars[:,0]),np.max(self.near_fars[:,1])]
-		self.near_far = [3.5, 7.0] # scene bound
+		self.near_far = [3.5, 5.5] # scene bound
+
+		if self.is_ndc:
+			self.near_far = [0, 1.0]
+
 		self.scene_bbox = torch.tensor([[-1.5, -1.67, -1.0], [1.5, 1.67, 1.0]])
 		# self.scene_bbox = torch.tensor([[-1.67, -1.5, -1.0], [1.67, 1.5, 1.0]])
 		self.center = torch.mean(self.scene_bbox, dim=0).float().view(1, 1, 3)
@@ -238,8 +243,10 @@ class ILSHDataset(Dataset):
 
 			img = img.view(3, -1).permute(1, 0)  # (h*w, 3) RGB
 			self.all_rgbs += [img]
+
 			rays_o, rays_d = get_rays(self.directions, c2w)  # both (h*w, 3)
-			# rays_o, rays_d = ndc_rays_blender(H, W, self.focal[0], 1.0, rays_o, rays_d)
+			if self.is_ndc:
+				rays_o, rays_d = ndc_rays_blender(H, W, self.focal[0], 1.0, rays_o, rays_d)
 			# viewdir = rays_d / torch.norm(rays_d, dim=-1, keepdim=True)
 
 			self.all_rays += [torch.cat([rays_o, rays_d], 1)]  # (h*w, 6)
