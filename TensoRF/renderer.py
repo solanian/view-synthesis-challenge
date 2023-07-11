@@ -24,7 +24,7 @@ def OctreeRender_trilinear_fast(rays, tensorf, chunk=4096, N_samples=-1, ndc_ray
 
 
 def OctreeRender_one_cam_3d_vis(rays, tensorf, chunk=4096, N_samples=-1, ndc_ray=False, white_bg=True, is_train=False,
-                                    img_wh=(0,0), train_iter=0, device='cuda'):
+                                    img_wh=(0,0), train_iter=50000000, device='cuda'):
     rgbs, alphas, depth_maps, weights, uncertainties = [], [], [], [], []
     N_rays_all = rays.shape[0]
 
@@ -65,7 +65,7 @@ def OctreeRender_one_cam_3d_vis(rays, tensorf, chunk=4096, N_samples=-1, ndc_ray
     return torch.cat(rgbs), None, torch.cat(depth_maps), None, None
 
 def OctreeRender_multi_cam_3d_vis(rays, tensorf, chunk=4096, N_samples=-1, ndc_ray=False, white_bg=True, is_train=True,
-                                    img_wh=(0,0), train_iter=0, device='cuda'): #is_train option is TRUE!!
+                                    img_wh=(0,0), train_iter=50000000, device='cuda'): #is_train option is TRUE!!
     rgbs, alphas, depth_maps, weights, uncertainties = [], [], [], [], []
     N_rays_all = rays.shape[0]
 
