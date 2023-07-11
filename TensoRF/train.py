@@ -169,7 +169,7 @@ def reconstruction(args):
     # [초기값]
     # aabb = [-1.5000, -1.6700, -1.0000,  1.5000,  1.6700,  1.0000]
     # grid갯수 = 128x128x128
-    # grid별 해상도(reso_cur)= [141, 157, 94]
+    # aabb 크기에 맞게 재계산한 grid갯수(reso_cur)= [141, 157, 94]
     # voxel 크기 = 0.021122
     # ray마다 sample갯수(nSamples) = 462
 
@@ -281,7 +281,8 @@ def reconstruction(args):
 
         if iteration % args.vis_every == args.vis_every - 1 and args.N_vis!=0:
             PSNRs_test = evaluation(test_dataset,tensorf, args, renderer, f'{logfolder}/imgs_vis/', N_vis=args.N_vis,
-                                    prtx=f'{iteration:06d}_', N_samples=nSamples, white_bg = white_bg, ndc_ray=ndc_ray, compute_extra_metrics=False)
+                                    prtx=f'{iteration:06d}_', N_samples=nSamples, white_bg = white_bg, ndc_ray=ndc_ray,
+                                    compute_extra_metrics=False, train_iter=iteration)
             summary_writer.add_scalar('test/psnr', np.mean(PSNRs_test), global_step=iteration)
 
         if iteration in update_AlphaMask_list:

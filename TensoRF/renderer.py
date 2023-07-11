@@ -108,7 +108,7 @@ def OctreeRender_multi_cam_3d_vis(rays, tensorf, chunk=4096, N_samples=-1, ndc_r
 
 @torch.no_grad()
 def evaluation(test_dataset,tensorf, args, renderer, savePath=None, N_vis=5, prtx='', N_samples=-1,
-               white_bg=False, ndc_ray=False, compute_extra_metrics=True, device='cuda'):
+               white_bg=False, ndc_ray=False, compute_extra_metrics=True, device='cuda', train_iter=5000000):
     PSNRs, rgb_maps, depth_maps = [], [], []
     ssims,l_alex,l_vgg=[],[],[]
     os.makedirs(savePath, exist_ok=True)
@@ -128,7 +128,8 @@ def evaluation(test_dataset,tensorf, args, renderer, savePath=None, N_vis=5, prt
         rays = samples.view(-1,samples.shape[-1])
 
         rgb_map, _, depth_map, _, _ = renderer(rays, tensorf, chunk=4096, N_samples=N_samples,
-                                        ndc_ray=ndc_ray, white_bg=white_bg, img_wh=test_dataset.img_wh, device=device)
+                                        ndc_ray=ndc_ray, white_bg=white_bg, img_wh=test_dataset.img_wh, device=device,
+                                        train_iter=train_iter)
 
         rgb_map = rgb_map.clamp(0.0, 1.0)
 
