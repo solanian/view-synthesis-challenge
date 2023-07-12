@@ -397,6 +397,8 @@ class ILSHDataset(Dataset):
 
 		self.all_rays = []
 		self.all_rgbs = []
+		self.all_means = []
+		self.all_covs = []
 		for i in tqdm(using_indices, desc="preprocessing for rays"):
 			c2w = torch.FloatTensor(self.poses[i])
 			if i not in range(len(self.image_paths)):
@@ -445,19 +447,29 @@ class ILSHDataset(Dataset):
 			if covs.dim() == 5:
 				covs = covs.squeeze(2)
 
+			means = means.reshape(-1, 3)
+			covs = covs.reshape(-1, 3, 3)
+
 			if self.is_ndc:
 				rays_o, rays_d = ndc_rays_blender(H, W, self.focal[0], 1.0, rays_o, rays_d)
 			# viewdir = rays_d / torch.norm(rays_d, dim=-1, keepdim=True)
 
 			self.all_rays += [torch.cat([rays_o, rays_d], 1)]  # (h*w, 6)
+			self.all_means += [means]
+			self.all_covs += [covs]
 
 		if not self.is_stack:
 			self.all_rays = torch.cat(self.all_rays, 0) # (len(self.meta['frames])*h*w, 3)
 			self.all_rgbs = torch.cat(self.all_rgbs, 0) # (len(self.meta['frames])*h*w,3)
+			self.all_means = torch.cat(self.all_means, 0)
+			self.all_covs = torch.cat(self.all_covs, 0)
 		else:
 			self.all_rays = torch.stack(self.all_rays, 0)   # (len(self.meta['frames]),h,w, 3)
 			self.all_rgbs = torch.stack(self.all_rgbs, 0).reshape(-1,*self.img_wh[::-1], 3)  # (len(self.meta['frames]),h,w,3)
-		print("all_rgbs shape :{}, all_rays shape :{}".format(self.all_rgbs.shape, self.all_rays.shape))
+			self.all_means = torch.stack(self.all_means, 0)
+			self.all_covs = torch.stack(self.all_covs, 0)
+		print(f"all_rgbs shape :{self.all_rgbs.shape}, all_rays shape :{self.all_rays.shape}")
+		print(f"all_means shape :{self.all_means.shape}, all_covs shape :{self.all_covs.shape}")
 
 		if self.use_bg_remove and self.split=="train" :
 			self.mask = torch.where(torch.all(self.all_rgbs != torch.tensor([0., 0., 0.]), dim=1))[0]
@@ -479,5 +491,7 @@ class ILSHDataset(Dataset):
 		sample = {
 			'rays': self.all_rays[idx],
 			'rgbs': self.all_rgbs[idx],
+			'means': self.all_means[idx],
+			'covs': self.all_covs[idx],
 		}
 		return sample

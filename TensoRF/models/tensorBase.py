@@ -470,7 +470,7 @@ class TensorBase(torch.nn.Module):
         return new_aabb
 
     @torch.no_grad()
-    def filtering_rays(self, all_rays, all_rgbs, N_samples=256, chunk=10240*5, bbox_only=False):
+    def filtering_rays(self, all_rays, all_rgbs, all_means=None, all_covs=None, N_samples=256, chunk=10240*5, bbox_only=False):
         print('========> filtering rays ...')
         tt = time.time()
 
@@ -499,7 +499,9 @@ class TensorBase(torch.nn.Module):
         mask_filtered = torch.cat(mask_filtered).view(all_rgbs.shape[:-1])
 
         print(f'Ray filtering done! takes {time.time()-tt} s. ray mask ratio: {torch.sum(mask_filtered) / N}')
-        return all_rays[mask_filtered], all_rgbs[mask_filtered]
+        if all_means is not None and all_covs is not None:
+            return all_rays[mask_filtered], all_rgbs[mask_filtered], all_means[mask_filtered], all_covs[mask_filtered]
+        return all_rays[mask_filtered], all_rgbs[mask_filtered], None, None
 
 
     def feature2density(self, density_features):
@@ -532,7 +534,7 @@ class TensorBase(torch.nn.Module):
         return alpha
 
 
-    def forward(self, rays_chunk, white_bg=True, is_train=False, ndc_ray=False, N_samples=-1, train_iter=0):
+    def forward(self, rays_chunk, means, covs, white_bg=True, is_train=False, ndc_ray=False, N_samples=-1, train_iter=0):
         # sample points
         viewdirs = rays_chunk[:, 3:6]
         if ndc_ray:
