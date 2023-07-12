@@ -5,8 +5,10 @@ import numpy as np
 import os
 from PIL import Image
 from torchvision import transforms as T
+from tqdm import tqdm
 
 from .ray_utils import *
+from .utils import camera_utils
 
 
 def normalize(v):
@@ -119,6 +121,159 @@ def get_spiral(c2ws_all, near_fars, rads_scale=1.0, N_views=120):
 	return np.stack(render_poses)
 
 
+def lift_gaussian(d, t_mean, t_var, r_var, diag):
+	"""Lift a Gaussian defined along a ray to 3D coordinates."""
+	mean = d[..., None, :] * t_mean[..., None]
+	eps = torch.finfo(d.dtype).eps
+	# eps = 1e-3
+	d_mag_sq = torch.sum(d ** 2, dim=-1, keepdim=True).clamp_min(eps)
+
+	if diag:
+		d_outer_diag = d ** 2
+		null_outer_diag = 1 - d_outer_diag / d_mag_sq
+		t_cov_diag = t_var[..., None] * d_outer_diag[..., None, :]
+		xy_cov_diag = r_var[..., None] * null_outer_diag[..., None, :]
+		cov_diag = t_cov_diag + xy_cov_diag
+		return mean, cov_diag
+	else:
+		d_outer = d[..., :, None] * d[..., None, :]
+		eye = torch.eye(d.shape[-1], device=d.device)
+		null_outer = eye - d[..., :, None] * (d / d_mag_sq)[..., None, :]
+		t_cov = t_var[..., None, None] * d_outer[..., None, :, :]
+		xy_cov = r_var[..., None, None] * null_outer[..., None, :, :]
+		cov = t_cov + xy_cov
+		return mean, cov
+
+
+def construct_ray_warps(fn, t_near, t_far, lam=None):
+	"""Construct a bijection between metric distances and normalized distances.
+
+	See the text around Equation 11 in https://arxiv.org/abs/2111.12077 for a
+	detailed explanation.
+
+	Args:
+		fn: the function to ray distances.
+		t_near: a tensor of near-plane distances.
+		t_far: a tensor of far-plane distances.
+		lam: for lam in Eq(4) in zip-nerf
+
+	Returns:
+		t_to_s: a function that maps distances to normalized distances in [0, 1].
+		s_to_t: the inverse of t_to_s.
+	"""
+	if fn is None:
+		fn_fwd = lambda x: x
+		fn_inv = lambda x: x
+	elif fn == 'piecewise':
+		# Piecewise spacing combining identity and 1/x functions to allow t_near=0.
+		fn_fwd = lambda x: torch.where(x < 1, .5 * x, 1 - .5 / x)
+		fn_inv = lambda x: torch.where(x < .5, 2 * x, .5 / (1 - x))
+	# elif fn == 'power_transformation':
+	#     fn_fwd = lambda x: power_transformation(x * 2, lam=lam)
+	#     fn_inv = lambda y: inv_power_transformation(y, lam=lam) / 2
+	else:
+		inv_mapping = {
+			'reciprocal': torch.reciprocal,
+			'log': torch.exp,
+			'exp': torch.log,
+			'sqrt': torch.square,
+			'square': torch.sqrt,
+		}
+		fn_fwd = fn
+		fn_inv = inv_mapping[fn.__name__]
+
+	s_near, s_far = [fn_fwd(x) for x in (t_near, t_far)]
+	t_to_s = lambda t: (fn_fwd(t) - s_near) / (s_far - s_near)
+	s_to_t = lambda s: fn_inv(s * s_far + (1 - s) * s_near)
+	return t_to_s, s_to_t
+
+
+def conical_frustum_to_gaussian(d, t0, t1, base_radius, diag, stable=True):
+	"""Approximate a conical frustum as a Gaussian distribution (mean+cov).
+
+	Assumes the ray is originating from the origin, and base_radius is the
+	radius at dist=1. Doesn't assume `d` is normalized.
+
+	Args:
+		d: the axis of the cone
+		t0: the starting distance of the frustum.
+		t1: the ending distance of the frustum.
+		base_radius: the scale of the radius as a function of distance.
+		diag: whether or the Gaussian will be diagonal or full-covariance.
+		stable: whether or not to use the stable computation described in
+		the paper (setting this to False will cause catastrophic failure).
+
+	Returns:
+		a Gaussian (mean and covariance).
+	"""
+	if stable:
+		# Equation 7 in the paper (https://arxiv.org/abs/2103.13415).
+		mu = (t0 + t1) / 2  # The average of the two `t` values.
+		hw = (t1 - t0) / 2  # The half-width of the two `t` values.
+		eps = torch.finfo(d.dtype).eps
+		# eps = 1e-3
+		t_mean = mu + (2 * mu * hw ** 2) / (3 * mu ** 2 + hw ** 2).clamp_min(eps)
+		denom = (3 * mu ** 2 + hw ** 2).clamp_min(eps)
+		t_var = (hw ** 2) / 3 - (4 / 15) * hw ** 4 * (12 * mu ** 2 - hw ** 2) / denom ** 2
+		r_var = (mu ** 2) / 4 + (5 / 12) * hw ** 2 - (4 / 15) * (hw ** 4) / denom
+	else:
+		# Equations 37-39 in the paper.
+		t_mean = (3 * (t1 ** 4 - t0 ** 4)) / (4 * (t1 ** 3 - t0 ** 3))
+		r_var = 3 / 20 * (t1 ** 5 - t0 ** 5) / (t1 ** 3 - t0 ** 3)
+		t_mosq = 3 / 5 * (t1 ** 5 - t0 ** 5) / (t1 ** 3 - t0 ** 3)
+		t_var = t_mosq - t_mean ** 2
+	r_var *= base_radius ** 2
+	return lift_gaussian(d, t_mean, t_var, r_var, diag)
+
+
+def cylinder_to_gaussian(d, t0, t1, radius, diag):
+		"""Approximate a cylinder as a Gaussian distribution (mean+cov).
+
+	Assumes the ray is originating from the origin, and radius is the
+	radius. Does not renormalize `d`.
+
+	Args:
+		d: the axis of the cylinder
+		t0: the starting distance of the cylinder.
+		t1: the ending distance of the cylinder.
+		radius: the radius of the cylinder
+		diag: whether or the Gaussian will be diagonal or full-covariance.
+
+	Returns:
+		a Gaussian (mean and covariance).
+	"""
+		t_mean = (t0 + t1) / 2
+		r_var = radius ** 2 / 4
+		t_var = (t1 - t0) ** 2 / 12
+		return lift_gaussian(d, t_mean, t_var, r_var, diag)
+
+def cast_rays(tdist, origins, directions, radii, ray_shape, diag=True):
+	"""Cast rays (cone- or cylinder-shaped) and featurize sections of it.
+
+	Args:
+		tdist: float array, the "fencepost" distances along the ray.
+		origins: float array, the ray origin coordinates.
+		directions: float array, the ray direction vectors.
+		radii: float array, the radii (base radii for cones) of the rays.
+		ray_shape: string, the shape of the ray, must be 'cone' or 'cylinder'.
+		diag: boolean, whether or not the covariance matrices should be diagonal.
+
+	Returns:
+		a tuple of arrays of means and covariances.
+	"""
+	t0 = tdist[..., :-1]
+	t1 = tdist[..., 1:]
+	if ray_shape == 'cone':
+		gaussian_fn = conical_frustum_to_gaussian
+	elif ray_shape == 'cylinder':
+		gaussian_fn = cylinder_to_gaussian
+	else:
+		raise ValueError('ray_shape must be \'cone\' or \'cylinder\'')
+	means, covs = gaussian_fn(directions, t0, t1, radii, diag)
+	means = means + origins[..., None, :]
+	return means, covs
+
+
 class ILSHDataset(Dataset):
 	def __init__(self, datadir, split='train', downsample=1.0, is_stack=False, hold_every=0, bg_remove=True, is_ndc=False, use_aug_pose=False):
 		"""
@@ -136,13 +291,15 @@ class ILSHDataset(Dataset):
 		self.use_bg_remove = bg_remove
 		self.is_ndc = is_ndc
 		self.use_aug_pose = use_aug_pose
+		self.patch_size = 1
+		self.near_far = [3.5, 5.5] # scene bound
 
 		self.blender2opencv = np.eye(4)#np.array([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
 		self.read_meta()
 		self.white_bg = False
 
 		#         self.near_far = [np.min(self.near_fars[:,0]),np.max(self.near_fars[:,1])]
-		self.near_far = [3.5, 5.5] # scene bound
+		
 
 		if self.is_ndc:
 			self.near_far = [0, 1.0]
@@ -240,7 +397,7 @@ class ILSHDataset(Dataset):
 
 		self.all_rays = []
 		self.all_rgbs = []
-		for i in using_indices:
+		for i in tqdm(using_indices, desc="preprocessing for rays"):
 			c2w = torch.FloatTensor(self.poses[i])
 			if i not in range(len(self.image_paths)):
 				img = np.zeros((3, self.img_wh[1], self.img_wh[0]))
@@ -256,6 +413,38 @@ class ILSHDataset(Dataset):
 			self.all_rgbs += [img]
 
 			rays_o, rays_d = get_rays(self.directions, c2w)  # both (h*w, 3)
+
+			# gaussian sampling from rays
+			near, far = self.near_far
+			_, s_to_t = construct_ray_warps(None, near, far)
+
+			init_s_near = 0.
+			init_s_far = 1.
+			
+			sdist = torch.cat([
+				torch.full_like(torch.Tensor([near]), init_s_near),
+				torch.full_like(torch.Tensor([far]), init_s_far)
+			],axis=-1)
+			
+			# Convert normalized distances to metric distances.
+			tdist = s_to_t(sdist)
+
+			pix_x_int, pix_y_int = camera_utils.pixel_coordinates(W, H)
+			pixtocam = camera_utils.get_pixtocam(self.focal[0], W, H)
+			origins, directions, cam_dirs, radii, imageplane = camera_utils.pixels_to_rays(pix_x_int, pix_y_int, pixtocam, c2w)
+			means, covs = cast_rays(
+				tdist, 
+				origins, 
+				directions, 
+				radii, 
+				ray_shape='cone',
+				diag=False)
+			
+			if means.dim() == 4:
+				means = means.squeeze(2)
+			if covs.dim() == 5:
+				covs = covs.squeeze(2)
+
 			if self.is_ndc:
 				rays_o, rays_d = ndc_rays_blender(H, W, self.focal[0], 1.0, rays_o, rays_d)
 			# viewdir = rays_d / torch.norm(rays_d, dim=-1, keepdim=True)
@@ -287,6 +476,8 @@ class ILSHDataset(Dataset):
 	def __getitem__(self, idx):
 		if self.use_bg_remove and self.split=="train" :
 			idx = self.mask[idx]
-		sample = {'rays': self.all_rays[idx],
-				'rgbs': self.all_rgbs[idx]}
+		sample = {
+			'rays': self.all_rays[idx],
+			'rgbs': self.all_rgbs[idx],
+		}
 		return sample

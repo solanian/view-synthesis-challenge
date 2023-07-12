@@ -7,6 +7,7 @@ import numpy as np
 import time
 import random
 import csv
+import math
 
 def positional_encoding(positions, freqs):
     
@@ -15,6 +16,34 @@ def positional_encoding(positions, freqs):
             positions.shape[:-1] + (freqs * positions.shape[-1], ))  # (..., DF)
         pts = torch.cat([torch.sin(pts), torch.cos(pts)], dim=-1)
         return pts
+
+
+def expected_sin(mean, var):
+    """Compute the mean of sin(x), x ~ N(mean, var)."""
+    return torch.exp(-0.5 * var) * math.safe_sin(mean)  # large var -> small value.
+
+
+def integrated_pos_enc_mip_nerf_360(mean, var, min_deg, max_deg):
+    """Encode `x` with sinusoids scaled by 2^[min_deg, max_deg).
+
+Args:
+    mean: tensor, the mean coordinates to be encoded
+    var: tensor, the variance of the coordinates to be encoded.
+    min_deg: int, the min degree of the encoding.
+    max_deg: int, the max degree of the encoding.
+
+Returns:
+    encoded: tensor, encoded variables.
+"""
+    scales = 2 ** torch.arange(min_deg, max_deg, device=mean.device)
+    shape = mean.shape[:-1] + (-1,)
+    scaled_mean = (mean[..., None, :] * scales[:, None]).reshape(*shape)
+    scaled_var = (var[..., None, :] * scales[:, None] ** 2).reshape(*shape)
+
+    return expected_sin(
+        torch.cat([scaled_mean, scaled_mean + 0.5 * torch.pi], dim=-1),
+        torch.cat([scaled_var] * 2, dim=-1))
+
 
 def raw2alpha(sigma, dist):
     # sigma, dist  [N_rays, N_samples]
@@ -322,7 +351,6 @@ class TensorBase(torch.nn.Module):
             self.alphaMask = AlphaGridMask(self.device, ckpt['alphaMask.aabb'].to(self.device), alpha_volume.float().to(self.device))
         self.load_state_dict(ckpt['state_dict'])
 
-
     def sample_ray_ndc(self, rays_o, rays_d, is_train=True, N_samples=-1):
         N_samples = N_samples if N_samples > 0 else self.nSamples
         near, far = self.near_far
@@ -368,7 +396,31 @@ class TensorBase(torch.nn.Module):
 
 
         return rays_pts, interpx, ~mask_outbbox
+    
 
+    def sample_ray_mip_nerf_360(self, rays_o, rays_d):
+        near, far = self.near_far
+        _, s_to_t = construct_ray_warps(None, near, far)
+
+        init_s_near = 0.
+        init_s_far = 1.
+        
+        sdist = torch.concatenate([
+            torch.full_like(near, init_s_near),
+            torch.full_like(far, init_s_far)
+        ],axis=-1)
+        
+        # Convert normalized distances to metric distances.
+        tdist = s_to_t(sdist)
+
+        # Cast our rays, by turning our distance intervals into Gaussians.
+        gaussians = cast_rays(
+            tdist,
+            rays_o,
+            rays_d,
+            rays.radii,
+            self.ray_shape,
+            diag=False)
 
     def shrink(self, new_aabb, voxel_size):
         pass

@@ -5,6 +5,17 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
+			"name": "aug",
+			"type": "python",
+			"request": "launch",
+			"program": "${workspaceFolder}/scripts/generate_augmented_poses.py",
+			"console": "integratedTerminal",
+			"justMyCode": false,
+			"args": [
+				"--in_dir", "./data_root/devPhase/004_00/"
+			]
+		},
+		{
 			"name": "train.py",
 			"type": "python",
 			"request": "launch",
@@ -19,7 +30,8 @@
 				// "--gin_configs", "configs/ilsh.gin",
 				// "--gin_bindings", "Config.data_dir = 'data/devPhase/devPhase_01/004_00'",
 				// "--gin_bindings", "Config.exp_name = 'ilsh/devPhase_01/004_00'",
-				"--config", "configs/config_face.txt"
+				"--config",
+				"configs/config_face.txt"
 			],
 			"console": "integratedTerminal",
 			"justMyCode": false,
@@ -41,9 +53,12 @@
 				// "--gin_bindings", "Config.render_path_frames = 120",
 				// "--gin_bindings", "Config.render_video_fps = 30",
 				// "--gin_bindings", "Config.factor = 4",
-				"--gin_configs", "configs/ilsh.gin",
-				"--gin_bindings", "Config.data_dir = 'data/devPhase/devPhase_01/004_00'",
-				"--gin_bindings", "Config.exp_name = 'ilsh/devPhase_01/004_00'",
+				"--gin_configs",
+				"configs/ilsh.gin",
+				"--gin_bindings",
+				"Config.data_dir = 'data/devPhase/devPhase_01/004_00'",
+				"--gin_bindings",
+				"Config.exp_name = 'ilsh/devPhase_01/004_00'",
 			],
 			"console": "integratedTerminal",
 			"justMyCode": false,
@@ -58,13 +73,11 @@
 			"program": "${workspaceFolder}/TensoRF/train.py",
 			"args": [
 				// for ILSH
-				"--config", "configs/ilsh.txt"
+				"--config",
+				"configs/dsseo_test/ilsh_grid_400.txt"
 			],
 			"console": "integratedTerminal",
 			"justMyCode": false,
-			"env": {
-				"CUDA_VISIBLE_DEVICES": "6"
-			},
 			"cwd": "${workspaceFolder}/TensoRF"
 		},
 	]
