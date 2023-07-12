@@ -86,7 +86,7 @@ def random_camera_pose(elevation_range, distance_range):
 
 	# Generate random angles and distance within the given range
 	elevation = random.uniform(elevation_min, elevation_max)
-	azimuth = random.uniform(0, 360)
+	azimuth = random.uniform(-90, 90)
 	distance = random.uniform(distance_min, distance_max)
 
 	# Convert spherical coordinates to Cartesian coordinates
@@ -169,7 +169,8 @@ def angle_between_points(p1, p2, origin=np.array([0, 0, 0])):
 def parse_args():
 	parser = argparse.ArgumentParser()
 	parser.add_argument('--in_dir', type=str, help='Path to a subject directory (e.g., /ToyEx/000_00)')
-	parser.add_argument('--out_path', type=str, help='Path to the output mp4 file')
+	parser.add_argument('--aug_num', type=int, default=10, help='Path to a subject directory (e.g., /ToyEx/000_00)')
+	parser.add_argument('--max_deg_diff', type=int, default=3, help='Path to a subject directory (e.g., /ToyEx/000_00)')
 	args = parser.parse_args()
 	return args
 
@@ -206,7 +207,7 @@ if __name__=='__main__':
 	
 	aug_poses = []
 
-	gen_num = 80
+	gen_num = args.aug_num
 	gen_cnt = 0
 	
 	while True:
@@ -221,7 +222,7 @@ if __name__=='__main__':
 				if ang_dist < min_ang_dist:
 					min_ang_dist = ang_dist
 					min_idx = ii
-		if min_ang_dist > 3:
+		if min_ang_dist > args.max_deg_diff:
 			continue
 		img = cv2.imread(image_paths[min_idx])
 		warped_img = warp_image(img, poses[min_idx], aug_pose, np.linalg.inv(pixtocams))
