@@ -120,7 +120,7 @@ def get_spiral(c2ws_all, near_fars, rads_scale=1.0, N_views=120):
 
 
 class ILSHDataset(Dataset):
-	def __init__(self, datadir, split='train', downsample=1.0, is_stack=False, hold_every=-1, bg_remove=True, is_ndc=False, use_aug_pose=False):
+	def __init__(self, datadir, split='train', downsample=1.0, is_stack=False, hold_every=0, bg_remove=True, is_ndc=False, use_aug_pose=False):
 		"""
 		spheric_poses: whether the images are taken in a spheric inward-facing manner
 					default: False (forward-facing)

@@ -54,6 +54,8 @@ def config_parser(cmd=None):
                         help='loss weight')
     parser.add_argument("--TV_weight_app", type=float, default=0.0,
                         help='loss weight')
+    parser.add_argument("--loss_type", type=str, default="MSE",
+                        help='loss type')
     
     # model
     # volume options

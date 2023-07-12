@@ -14,8 +14,9 @@ update_AlphaMask_list = [2000,4000]
 N_vis = 1
 vis_every = 5000
 
-render_train = 1
-render_test = 1
+#loss_type = RAW_NERF
+#render_train = 1
+#render_test = 1
 ###render_path = 1
 
 n_lamb_sigma = [16,4,4]

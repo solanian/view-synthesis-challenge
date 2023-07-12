@@ -229,8 +229,24 @@ def reconstruction(args):
         rgb_map, alphas_map, depth_map, weights, uncertainty = renderer(rays_train, tensorf, chunk=args.batch_size,
                                 N_samples=nSamples, white_bg = white_bg, ndc_ray=ndc_ray, device=device, is_train=True,
                                 train_iter=iteration)
+        if args.loss_type == "MSE":
+            loss = torch.mean((rgb_map - rgb_train) ** 2)
+        elif args.loss_type == "RAW_NERF":
+            torch_ones = torch.ones(rgb_map.shape).to(device)
+            rgb_render_clip = torch.minimum(torch_ones, rgb_map)
+            resid_sg_clip = (rgb_render_clip - rgb_train)**2
+            with torch.no_grad():
+                sg_y_pred = rgb_render_clip.clone()
+            scaling_grad = 1./(1e-3 + sg_y_pred)
+            loss = (resid_sg_clip * scaling_grad ** 2).mean()
+            # resid_sg_clip = (rgb_map - rgb_train)**2
+            # with torch.no_grad():
+            #     sg_y_pred = rgb_map.clone()
+            # scaling_grad = 1./(1e-3 + sg_y_pred)
+            # loss = (resid_sg_clip*scaling_grad**2).mean()
+        elif args.loss_type == "MIP_NERF_360":
+            pass
 
-        loss = torch.mean((rgb_map - rgb_train) ** 2)
 
         # loss
         total_loss = loss
@@ -284,6 +300,7 @@ def reconstruction(args):
                                     prtx=f'{iteration:06d}_', N_samples=nSamples, white_bg = white_bg, ndc_ray=ndc_ray,
                                     compute_extra_metrics=False, train_iter=iteration)
             summary_writer.add_scalar('test/psnr', np.mean(PSNRs_test), global_step=iteration)
+            tensorf.save(f'{logfolder}/{args.expname}_{iteration}.th')
 
         if iteration in update_AlphaMask_list:
 
