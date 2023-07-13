@@ -137,6 +137,7 @@ class ILSHDataset(Dataset):
 		self.use_bg_remove = bg_remove
 		self.is_ndc = is_ndc
 		self.use_aug_pose = use_aug_pose
+		self.phase = phase
 
 		self.blender2opencv = np.eye(4)#np.array([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
 		self.read_meta()
