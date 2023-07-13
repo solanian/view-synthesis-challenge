@@ -1,5 +1,5 @@
 {
-	"name": "view-synthesis-challenge",
+	"name": "vscdev",
 	"build": {
 		"dockerfile": "geonerf.Dockerfile",
 		"args": {
@@ -22,7 +22,7 @@
 		"--ipc=host",
 		"--pid=host",
 		"--uts=host",
-		"--name", "view-synthesis-challenge-${localEnv:USER}"
+		"--name", "vscdev-${localEnv:USER}"
 	],
 	"settings": {
 		"editor.detectIndentation": false,
