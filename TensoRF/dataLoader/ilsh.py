@@ -120,7 +120,8 @@ def get_spiral(c2ws_all, near_fars, rads_scale=1.0, N_views=120):
 
 
 class ILSHDataset(Dataset):
-	def __init__(self, datadir, split='train', downsample=1.0, is_stack=False, hold_every=0, bg_remove=True, is_ndc=False, use_aug_pose=False):
+	def __init__(self, datadir, split='train', downsample=1.0, is_stack=False, hold_every=0, 
+	      	bg_remove=True, is_ndc=False, use_aug_pose=False, phase='cha'):
 		"""
 		spheric_poses: whether the images are taken in a spheric inward-facing manner
 					default: False (forward-facing)
@@ -154,7 +155,10 @@ class ILSHDataset(Dataset):
 
 	def read_meta(self):
 		poses_bounds = np.load(os.path.join(self.root_dir, 'poses_bounds_train.npy'))  # (N_images, 17)
-		poses_bounds_val = np.load(os.path.join(self.root_dir, "poses_bounds_val.npy")) # (N_images, 17)
+		if self.phase == 'dev':
+			poses_bounds_val = np.load(os.path.join(self.root_dir, "poses_bounds_val.npy")) # (N_images, 17)
+		elif self.phase == 'cha':
+			poses_bounds_val = np.load(os.path.join(self.root_dir, "poses_bounds_test.npy")) # (N_images, 17)
 		if self.use_bg_remove:
 			self.image_paths = sorted(glob.glob(os.path.join(self.root_dir, 'images_bg_remove/*')))
 		else:
