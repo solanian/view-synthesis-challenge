@@ -34,18 +34,20 @@ def rotation_quaternion(roll, pitch, yaw):
 
 
 def warp_image(image, C1, C2, K):
+	if C1.shape == (3, 4):
+		C1 = np.vstack((C1, np.array([[0, 0, 0, 1]])))
+	if C2.shape == (3, 4):
+		C2 = np.vstack((C2, np.array([[0, 0, 0, 1]])))
 	# Step 1: Find transformation matrix
-	T = np.dot(np.linalg.pinv(C1), C2)
-    
+	T = np.dot(np.linalg.inv(C1), C2)
+
 	# Step 2: Get 2D pixel coordinates (homogeneous coordinates)
 	h, w = image.shape[:2]
 	x, y = np.meshgrid(range(w), range(h))
 	P2D = np.vstack((x.flatten(), y.flatten(), np.ones_like(x.flatten())))
 	
-	
 	# Step 3: Unproject 2D points to 3D points
 	P3D = np.dot(np.linalg.inv(K), P2D)
-
 
 	# Step 4: Apply the transformation to the 3D points
 	P3D_t = np.dot(T, np.vstack((P3D, np.ones_like(P3D[0]))))[:3] / P3D[2]
@@ -214,6 +216,7 @@ if __name__=='__main__':
 		if gen_cnt == gen_num:
 			break
 		aug_pose = random_camera_pose([min_elev, max_elev], [min_dist, max_dist])
+		# aug_pose = poses[gen_cnt]
 		min_ang_dist = sys.maxsize
 		min_idx = 0
 		for ii, pose_dict in enumerate(pose_dicts):
@@ -224,6 +227,7 @@ if __name__=='__main__':
 					min_idx = ii
 		if min_ang_dist > args.max_deg_diff:
 			continue
+		# min_idx = gen_cnt
 		img = cv2.imread(image_paths[min_idx])
 		warped_img = warp_image(img, poses[min_idx], aug_pose, np.linalg.inv(pixtocams))
 		file_name = str(Path(image_paths[min_idx]).parent.parent / Path('images_aug') / Path(image_paths[min_idx]).name.split('.')[0].split('_')[0]) + f'_00_{gen_cnt:02}.png'
