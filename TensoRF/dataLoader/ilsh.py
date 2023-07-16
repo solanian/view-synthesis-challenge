@@ -118,6 +118,47 @@ def get_spiral(c2ws_all, near_fars, rads_scale=1.0, N_views=120):
 	render_poses = render_path_spiral(c2w, up, rads, focal, zdelta, zrate=.5, N=N_views)
 	return np.stack(render_poses)
 
+def intrinsic_matrix(fx, fy, cx, cy):
+    """Intrinsic matrix for a pinhole camera in OpenCV coordinate system."""
+    return np.array([
+        [fx, 0, cx],
+        [0, fy, cy],
+        [0, 0, 1.],
+    ])
+
+
+def get_camtopix(focal, width, height):
+    """Intrinsic matrix for a perfect pinhole camera."""
+    return intrinsic_matrix(focal, focal, width * .5, height * .5)
+
+
+def get_pixtocam(focal, width, height):
+    """Inverse intrinsic matrix for a perfect pinhole camera."""
+    return np.linalg.inv(get_camtopix)
+
+
+# Calculate frustum vertices for a given pose and intrinsics
+def frustum_vertices(pose, intrinsics, near, far):
+	view_matrix_inv = np.linalg.inv(pose)
+	fx, fy, cx, cy = intrinsics[0, 0], intrinsics[1, 1], intrinsics[0, 2], intrinsics[1, 2]
+	near_scale = near / fx
+	near_vertices = np.array([[-cx * near_scale, -cy * near_scale, -near], [cx * near_scale, -cy * near_scale, -near], [cx * near_scale, cy * near_scale, -near], [-cx * near_scale, cy * near_scale, -near]])
+	far_scale = far / fx
+	far_vertices = np.array([[-cx * far_scale, -cy * far_scale, -far], [cx * far_scale, -cy * far_scale, -far], [cx * far_scale, cy * far_scale, -far], [-cx * far_scale, cy * far_scale, -far]])
+	vertices = np.vstack((near_vertices, far_vertices))
+	# vertices = (vertices.T / vertices[:, 2]).T
+	vertices_hom = np.hstack((vertices, np.ones((8, 1))))
+	return pose @ vertices_hom.T
+
+
+def projection_matrix_from_intrinsics(intrinsics, near, far):
+    fx, fy, cx, cy = intrinsics[0, 0], intrinsics[1, 1], intrinsics[0, 2], intrinsics[1, 2]
+    proj_matrix = np.array([[fx, 0, cx, 0],
+                            [0, fy, cy, 0],
+                            [0, 0, -(far + near) / (far - near), -2 * far * near / (far - near)],
+                            [0, 0, -1, 0]])
+    return proj_matrix
+
 
 class ILSHDataset(Dataset):
 	def __init__(self, datadir, split='train', downsample=1.0, is_stack=False, hold_every=0, 
@@ -138,14 +179,13 @@ class ILSHDataset(Dataset):
 		self.is_ndc = is_ndc
 		self.use_aug_pose = use_aug_pose
 		self.phase = phase
-
+		self.near_far = [3.5, 5.5] # scene bound
 		self.blender2opencv = np.eye(4)#np.array([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
+		self.frustums_vertices = []
 		self.read_meta()
 		self.white_bg = False
-
+		
 		#         self.near_far = [np.min(self.near_fars[:,0]),np.max(self.near_fars[:,1])]
-		self.near_far = [3.5, 5.5] # scene bound
-
 		if self.is_ndc:
 			self.near_far = [0, 1.0]
 
@@ -153,7 +193,7 @@ class ILSHDataset(Dataset):
 		# self.scene_bbox = torch.tensor([[-1.67, -1.5, -1.0], [1.67, 1.5, 1.0]])
 		self.center = torch.mean(self.scene_bbox, dim=0).float().view(1, 1, 3)
 		self.invradius = 1.0 / (self.scene_bbox[1] - self.center).float().view(1, 1, 3)
-
+	
 	def read_meta(self):
 		poses_bounds = np.load(os.path.join(self.root_dir, 'poses_bounds_train.npy'))  # (N_images, 17)
 		if self.phase == 'dev':
@@ -186,6 +226,7 @@ class ILSHDataset(Dataset):
 		H, W, self.focal = poses[0, :, -1]  # original intrinsics, same for all images
 		self.img_wh = np.array([int(W / self.downsample), int(H / self.downsample)])
 		self.focal = [self.focal * self.img_wh[0] / W, self.focal * self.img_wh[1] / H]
+		camtopix = get_camtopix(self.focal[0], W, H)
 
 		# Step 2: correct poses
 		# Original poses has rotation in form "down right back", change to "right up back"
@@ -224,7 +265,7 @@ class ILSHDataset(Dataset):
 		# ray directions for all pixels, same for all images (same H, W, focal)
 		W, H = self.img_wh
 		self.directions = get_ray_directions_blender(H, W, self.focal)  # (H, W, 3)
-
+		
 		# average_pose = average_poses(self.poses)
 		# dists = np.sum(np.square(average_pose[:3, 3] - self.poses[:, :3, 3]), -1)
 		if self.hold_every == 0:
@@ -278,6 +319,34 @@ class ILSHDataset(Dataset):
 		if self.use_bg_remove and self.split=="train" :
 			self.mask = torch.where(torch.all(self.all_rgbs != torch.tensor([0., 0., 0.]), dim=1))[0]
 			print("mask shape :{}".format(self.mask.shape))
+
+		
+		for i, pose in enumerate(self.poses):
+			self.frustums_vertices.append(frustum_vertices(np.vstack((pose, np.array([0, 0, 0, 1]))), camtopix, self.near_far[0], self.near_far[1]) / scale_factor)
+
+		self.frustums_vertices = np.array(self.frustums_vertices)[using_indices]
+
+		if False:
+			import plotly.graph_objects as go
+			import plotly.express as px
+			# Add a frustum trace to the figure
+			def add_frustum_trace(fig, vertices, idx):
+				color_map = px.colors.qualitative.Alphabet
+				indices = [(0,1,2),(0,2,3),(4,5,6),(4,6,7),(0,1,5),(0,4,5),(2,6,7),(2,3,7),(0,3,7),(0,4,7),(1,5,6),(1,2,6)]  # indices of corner vertices (to create a mesh)
+				fig.add_trace(go.Mesh3d(x=vertices[0], y=vertices[1], z=vertices[2], i=[index[0] for index in indices], j=[index[1] for index in indices], k=[index[2] for index in indices], opacity=0.1, name=f'Frustum {idx + 1}', color=color_map[idx]))
+			# Create a Plotly figure
+			fig = go.Figure()
+			# Add all frustums to the figure
+			for i, vertices in enumerate(self.frustums_vertices):
+				add_frustum_trace(fig, vertices, i)
+
+			# Configure the 3D scene and display the figure
+			fig.update_layout(scene=dict(aspectmode='data'))
+			fig.write_html("frustums.html")
+
+
+	def get_frustum_vertices(self):
+		return self.frustums_vertices
 
 	def define_transforms(self):
 		self.transform = T.ToTensor()
