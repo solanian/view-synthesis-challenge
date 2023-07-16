@@ -170,7 +170,7 @@ class MLPRender_PE(torch.nn.Module):
 
 
 class MLPRender_ZipNeRF_PE(torch.nn.Module):
-    def __init__(self,inChanel, viewpe=6, pospe=6, featureC=128):
+    def __init__(self,inChanel, viewpe=6, pospe=6, featureC=128, is_for_rgb=True):
         super(MLPRender_ZipNeRF_PE, self).__init__()
 
 
@@ -187,26 +187,30 @@ class MLPRender_ZipNeRF_PE(torch.nn.Module):
                                    log2_hashmap_size=self.grid_log2_hashmap_size,
                                    gridtype='hash',
                                    align_corners=False)
-        self.density_layer = nn.Sequential(nn.Linear(self.encoder.output_dim, 64),
-                                           nn.ReLU(),
-                                           nn.Linear(64, 3))  # Hardcoded to a single channel.
 
-
-
-
+        self.is_for_rgb = is_for_rgb
         # self.in_mlpC = (3+2*viewpe*3)+ (3+2*pospe*3)  + inChanel #
-        self.in_mlpC = 37
+        if self.is_for_rgb:
+            self.in_mlpC = 172
+            out_mlpC = 3
+        else:
+            self.in_mlpC = 16
+            out_mlpC = 1
         self.viewpe = viewpe
         self.pospe = pospe
         layer1 = torch.nn.Linear(self.in_mlpC, featureC)
         layer2 = torch.nn.Linear(featureC, featureC)
-        layer3 = torch.nn.Linear(featureC,3)
+        layer3 = torch.nn.Linear(featureC, out_mlpC)
         self.mlp = torch.nn.Sequential(layer1, torch.nn.ReLU(inplace=True), layer2, torch.nn.ReLU(inplace=True), layer3)
         torch.nn.init.constant_(self.mlp[-1].bias, 0)
 
     def forward(self, means, stds, features):
+        if self.is_for_rgb:
+            tmp_feature = features.permute(1,0,2)
+            features = tmp_feature.reshape(tmp_feature.shape[0], -1)
+
         indata = [features]
-        # print(features.shape) # torch.Size([370143, 27])
+
         means, stds = coord.track_linearize("contract", means, stds)
         # contract [-2, 2] to [-1, 1]
         bound = 2
@@ -218,9 +222,11 @@ class MLPRender_ZipNeRF_PE(torch.nn.Module):
         zip_features = (zip_features * weights[..., None]).mean(dim=-3).flatten(-2, -1)
 
         indata += [zip_features]
-        mlp_in = torch.cat(indata, dim=-1)
+        # print(features.shape)  # torch.Size([370143, 162])
         # print(zip_features.shape)  # torch.Size([370143, 10])
-        # print(mlp_in.shape)         # torch.Size([370143, 37])
+
+        mlp_in = torch.cat(indata, dim=-1)
+        # print(mlp_in.shape)         # torch.Size([370143, 172])
 
 
         rgb = self.mlp(mlp_in)
@@ -293,7 +299,8 @@ class TensorBase(torch.nn.Module):
         self.shadingMode, self.pos_pe, self.view_pe, self.fea_pe, self.featureC = shadingMode, pos_pe, view_pe, fea_pe, featureC
 
         if shadingMode == "MLP_ZipNeRF_Fea":
-            self.renderModule = MLPRender_ZipNeRF_PE(self.app_dim, view_pe, pos_pe, featureC).to(device)
+            self.densityModule = MLPRender_ZipNeRF_PE(self.app_dim, view_pe, pos_pe, featureC, is_for_rgb=False).to(device)
+            self.renderModule = MLPRender_ZipNeRF_PE(self.app_dim, view_pe, pos_pe, featureC, is_for_rgb=True).to(device)
         else:
             self.init_render_func(shadingMode, pos_pe, view_pe, fea_pe, featureC, device)
 

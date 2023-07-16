@@ -71,6 +71,50 @@ class TensorVMSplit_ZipNeRF(TensorVMSplit):
 
         return means, stds
 
+
+    def compute_densityfeature(self, means):
+        # means.shape = [751904, 6, 3]
+        coordinate_plane = torch.stack((means[..., self.matMode[0]], means[..., self.matMode[1]],
+                                        means[..., self.matMode[2]])).detach().view(3, -1, 6, 2)
+        coordinate_line = torch.stack((means[..., self.vecMode[0]], means[..., self.vecMode[1]],
+                                       means[..., self.vecMode[2]]))
+        # coordinate_line = [751904,6]
+        # coordinate_line = torch.stack((torch.zeros_like(coordinate_line), coordinate_line), dim=-1).detach().view(3, -1, 1, 2)
+        coordinate_line = torch.stack((torch.zeros_like(coordinate_line), coordinate_line), dim=-1).detach().view(3, -1, 6, 2)
+        # coordinate_line = [3, 751904,6,2]
+        sigma_feature = torch.zeros((means.shape[0], means.shape[1]), device=means.device)
+        for idx_plane in range(len(self.density_plane)):  # len = 3
+            plane_coef_point = F.grid_sample(self.density_plane[idx_plane], coordinate_plane[[idx_plane]],
+                                             align_corners=True).view(-1, *means.shape[:2])
+            # [1,16,751904,6] --(view)--> [16,751904,6]
+            line_coef_point = F.grid_sample(self.density_line[idx_plane], coordinate_line[[idx_plane]],
+                                            align_corners=True).view(-1, *means.shape[:2])
+            # [1,16,751904,6] --(view)--> [16,751904,6]
+            sigma_feature = sigma_feature + torch.sum(plane_coef_point * line_coef_point, dim=0)
+            # [751904,6]
+        # print(sigma_feature.shape) # torch.Size([751904])
+        return sigma_feature
+
+    def compute_appfeature(self, means):
+
+        # plane + line basis
+        coordinate_plane = torch.stack((means[..., self.matMode[0]], means[..., self.matMode[1]],
+                                        means[..., self.matMode[2]])).detach().view(3, -1, 6, 2)
+        coordinate_line = torch.stack((means[..., self.vecMode[0]], means[..., self.vecMode[1]],
+                                       means[..., self.vecMode[2]]))
+        coordinate_line = torch.stack((torch.zeros_like(coordinate_line), coordinate_line), dim=-1).detach().view(3, -1,
+                                                                                                                  6, 2)
+
+        plane_coef_point, line_coef_point = [], []
+        for idx_plane in range(len(self.app_plane)):
+            plane_coef_point.append(F.grid_sample(self.app_plane[idx_plane], coordinate_plane[[idx_plane]],
+                                                  align_corners=True).view(-1, *means.shape[:2]))
+            line_coef_point.append(F.grid_sample(self.app_line[idx_plane], coordinate_line[[idx_plane]],
+                                                 align_corners=True).view(-1, *means.shape[:2]))
+        plane_coef_point, line_coef_point = torch.cat(plane_coef_point), torch.cat(line_coef_point)
+        #print(plane_coef_point.shape) #torch.Size([72, 221184, 6])
+        return self.basis_mat((plane_coef_point * line_coef_point).T)
+
     def forward(self, rays_chunk, white_bg=True, is_train=False, ndc_ray=False, N_samples=-1, train_iter=0,
                 origins=None, origin_directions=None, cam_dirs=None, radii=None, rand=True, no_warp=False):
 
@@ -82,64 +126,39 @@ class TensorVMSplit_ZipNeRF(TensorVMSplit):
         viewdirs = before_viewdirs
 
         xyz_sampled, z_vals, ray_valid = self.sample_ray(origins, viewdirs, is_train=is_train, N_samples=N_samples)
-        dists = torch.cat((z_vals[:, 1:] - z_vals[:, :-1], torch.zeros_like(z_vals[:, :1])), dim=-1)
+        dists = z_vals[:, 1:] - z_vals[:, :-1]
+        ray_valid = ray_valid[:,:-1]
+        # print(xyz_sampled.shape) #[4096, 462, 3]
 
-        ### zip-nerf encoding - Start ##########################
         means, stds = self.cast_rays_for_zip_nerf(z_vals, origins, viewdirs, cam_dirs, radii,
                                                    rand=rand, n=7, m=3, std_scale=0.5)
+        means = means.float()
+        stds = stds.float()
 
-        means = torch.cat([means, torch.unsqueeze(means[:, -1,...], 1)], 1).float()
-        stds = torch.cat([stds, torch.unsqueeze(stds[:, -1,...], 1)], 1).float()
-        #
-        # # print(viewdirs.shape, means.shape, stds.shape) # torch.Size([4096, 3]) torch.Size([4096, 461, 6, 3]) torch.Size([4096, 461, 6])
-        # x = self.predict_density(means, stds, rand=rand, no_warp=no_warp)
-        # mask_outbbox = ((self.aabb[0] > x) | (x > self.aabb[1])).any(dim=-1)
-        # ray_valid = mask_outbbox
-        #
-        # xyz_sampled = x
-        # dists = dists[:,:-1]
-        # print(dists.shape)
-        # print("$$$$$$$$")
-        ### zip-nerf encoding - End ############################
-        viewdirs = viewdirs.view(-1, 1, 3).expand(xyz_sampled.shape)
-
-        sigma = torch.zeros(xyz_sampled.shape[:-1], device=xyz_sampled.device)
-        rgb = torch.zeros((*xyz_sampled.shape[:2], 3), device=xyz_sampled.device)
+        sigma = torch.zeros(means.shape[:2], device=means.device)
+        rgb = torch.zeros((*means.shape[:2], 3), device=means.device)
 
         if ray_valid.any():
-            xyz_sampled = self.normalize_coord(xyz_sampled)   # 약 -4.5 ~ 4.5 범위로 변경됨
-            sigma_feature = self.compute_densityfeature(xyz_sampled[ray_valid])
-
-            validsigma = self.feature2density(sigma_feature)
+            sigma_feature = self.compute_densityfeature(means[ray_valid])
+            #print(sigma_feature.shape) #torch.Size([751882, 6])
+            mlp_res = self.densityModule(means[ray_valid], stds[ray_valid], sigma_feature).squeeze()
+            # print(mlp_res.shape)  # torch.Size([751911])
+            validsigma = self.feature2density(mlp_res)
             sigma[ray_valid] = validsigma
-        # print("@@@@@")
         alpha, weight, bg_weight = raw2alpha(sigma, dists * self.distance_scale)
 
         app_mask = weight > self.rayMarch_weight_thres
 
         if app_mask.any():
-            app_features = self.compute_appfeature(xyz_sampled[app_mask])
-            if self.shadingMode == 'MLP_freenerf_Fea':
-                ### increase the number of positional encoding
-                if train_iter > 40000:
-                    view_pe, fea_pe = 8, 8
-                elif train_iter > 30000:
-                    view_pe, fea_pe = 6, 6
-                elif train_iter > 20000:
-                    view_pe, fea_pe = 4, 4
-                elif train_iter > 10000:
-                    view_pe, fea_pe = 2, 2
-                else:
-                    view_pe, fea_pe = 0, 0
-                valid_rgbs = self.renderModule(xyz_sampled[app_mask], viewdirs[app_mask], app_features,
-                                               v_pe=view_pe, f_pe=fea_pe)
-            elif self.shadingMode == 'MLP_ZipNeRF_Fea':
-                valid_rgbs = self.renderModule(means[app_mask], stds[app_mask], app_features)
-            else:
-                valid_rgbs = self.renderModule(xyz_sampled[app_mask], viewdirs[app_mask], app_features)
+            app_features = self.compute_appfeature(means[app_mask])
+            valid_rgbs = self.renderModule(means[app_mask], stds[app_mask], app_features)
+            # print(app_mask.shape) #torch.Size([4096, 461])
+            # print(valid_rgbs.shape) #torch.Size([221184, 3])
+            # print(rgb.shape) #torch.Size([4096, 461, 3])
+
             rgb[app_mask] = valid_rgbs
 
-        vis_res = [xyz_sampled[app_mask], viewdirs[app_mask], rgb[app_mask]]
+        vis_res = []
         acc_map = torch.sum(weight, -1)
         rgb_map = torch.sum(weight[..., None] * rgb, -2)
 
@@ -149,7 +168,8 @@ class TensorVMSplit_ZipNeRF(TensorVMSplit):
         rgb_map = rgb_map.clamp(0, 1)
 
         with torch.no_grad():
-            depth_map = torch.sum(weight * z_vals, -1)
-            depth_map = depth_map + (1. - acc_map) * rays_chunk[..., -1]
+            # print(z_vals.shape) #torch.Size([4096, 462])
+            depth_map = torch.sum(weight * z_vals[:,:-1], -1)
+            depth_map = depth_map + (1. - acc_map) * rays_chunk[:, -1]
 
         return rgb_map, depth_map, vis_res  # rgb, sigma, alpha, weight, bg_weight

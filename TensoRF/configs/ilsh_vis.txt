@@ -27,7 +27,8 @@ n_lamb_sigma = [16,4,4]
 n_lamb_sh = [48,12,12]
 model_name = TensorVMSplit
 
-shadingMode = MLP_freenerf_Fea
+#shadingMode = MLP_freenerf_Fea
+shadingMode = MLP_ZipNeRF_Fea
 fea2denseAct = relu
 
 view_pe = 0
