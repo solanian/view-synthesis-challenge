@@ -214,8 +214,8 @@ def reconstruction(args):
         allorigins = train_dataset.all_origins
         alldirections = train_dataset.all_directions
         allallcam_dirs, allradii = train_dataset.all_cam_dirs, train_dataset.all_radii
-    if not args.ndc_ray:
-        allrays, allrgbs = tensorf.filtering_rays(allrays, allrgbs, bbox_only=True)
+    # if not args.ndc_ray:
+    #     allrays, allrgbs = tensorf.filtering_rays(allrays, allrgbs, bbox_only=True)
     trainingSampler = SimpleSampler(allrays.shape[0], args.batch_size)
 
     Ortho_reg_weight = args.Ortho_weight
