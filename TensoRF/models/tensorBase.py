@@ -7,7 +7,7 @@ import numpy as np
 import time
 import random
 import csv
-
+from models import run_nerf_helpers
 def positional_encoding(positions, freqs):
     
         freq_bands = (2**torch.arange(freqs).float()).to(positions.device)  # (F,)
@@ -212,7 +212,7 @@ class TensorBase(torch.nn.Module):
         self.fea2denseAct = fea2denseAct
 
         self.near_far = near_far
-        #self.near_far = [3.75,3.78]
+        self.near_far = [3.75,3.78]
         print("@@@ near_far :{} ".format(self.near_far))  # before :3.5, 7.0
         self.step_ratio = step_ratio
 
@@ -260,6 +260,9 @@ class TensorBase(torch.nn.Module):
         self.stepSize=torch.mean(self.units)*self.step_ratio #step_ratio는 configs에서 설정. opt.py에 0.5로 되어 있음
         self.aabbDiag = torch.sqrt(torch.sum(torch.square(self.aabbSize)))
         self.nSamples=int((self.aabbDiag / self.stepSize).item()) + 1
+
+        self.stepSize = 0.029   # <- this is for tmp value for fine sampling
+        self.nSamples = 168 # <- this is for tmp value for fine sampling
         print("sampling step size: ", self.stepSize)
         print("sampling number: ", self.nSamples)
 
@@ -481,6 +484,7 @@ class TensorBase(torch.nn.Module):
 
 
     def forward(self, rays_chunk, white_bg=True, is_train=False, ndc_ray=False, N_samples=-1, train_iter=0):
+        N_samples = self.nSamples ###### test for fine sampling !!!!!!!!
         # sample points
         viewdirs = rays_chunk[:, 3:6]
         if ndc_ray:
@@ -552,8 +556,89 @@ class TensorBase(torch.nn.Module):
             depth_map = torch.sum(weight * z_vals, -1)
             depth_map = depth_map + (1. - acc_map) * rays_chunk[..., -1]
 
-        return rgb_map, depth_map, vis_res # rgb, sigma, alpha, weight, bg_weight
+        #    return rgb_map, depth_map, vis_res # rgb, sigma, alpha, weight, bg_weight
+        ############# origin code ^
+        #https://github.com/yenchenlin/nerf-pytorch/blob/63a5a630c9abd62b0f21c08703d0ac2ea7d4b9dd/run_nerf.py#L393C4-L393C4
+        N_importance = N_samples
+        if N_importance > 0:
+            rgb_map_0, acc_map_0 = rgb_map, acc_map
+            perturb = 1
+            z_vals_mid = .5 * (z_vals[..., 1:] + z_vals[..., :-1])
+            z_samples = run_nerf_helpers.sample_pdf(z_vals_mid, weight[..., 1:-1], N_importance, det=(perturb == 0.))
+            z_samples = z_samples.detach()
 
+            z_vals, _ = torch.sort(torch.cat([z_vals, z_samples], -1), -1)
+
+            ### 3차원 sampling좌표값을 획득 : sample points를 camera좌표계에서 world좌표계로 변경
+            rays_o = rays_chunk[:, :3]
+            rays_d = rays_chunk[:, 3:6]
+            xyz_sampled = rays_o[..., None, :] + rays_d[..., None, :] * z_vals[...,:, None]
+
+
+            ### bound 밖에 위치 할 경우, 1인 array를 획득
+            mask_outbbox = ((self.aabb[0] > xyz_sampled) | (xyz_sampled > self.aabb[1])).any(dim=-1)
+            ray_valid = ~mask_outbbox
+
+            dists = torch.cat((z_vals[:, 1:] - z_vals[:, :-1], torch.zeros_like(z_vals[:, :1])), dim=-1)
+
+            viewdirs = viewdirs[:, 0, :]
+            viewdirs = viewdirs.view(-1, 1, 3).expand(xyz_sampled.shape)
+
+            if self.alphaMask is not None:
+                alphas = self.alphaMask.sample_alpha(xyz_sampled[ray_valid])
+                alpha_mask = alphas > 0
+                ray_invalid = ~ray_valid
+                ray_invalid[ray_valid] |= (~alpha_mask)
+                ray_valid = ~ray_invalid
+
+            sigma = torch.zeros(xyz_sampled.shape[:-1], device=xyz_sampled.device)
+            rgb = torch.zeros((*xyz_sampled.shape[:2], 3), device=xyz_sampled.device)
+
+            if ray_valid.any():
+                xyz_sampled = self.normalize_coord(xyz_sampled)
+                sigma_feature = self.compute_densityfeature(xyz_sampled[ray_valid])
+
+                validsigma = self.feature2density(sigma_feature)
+                sigma[ray_valid] = validsigma
+
+            alpha, weight, bg_weight = raw2alpha(sigma, dists * self.distance_scale)
+
+            app_mask = weight > self.rayMarch_weight_thres
+
+            if app_mask.any():
+                app_features = self.compute_appfeature(xyz_sampled[app_mask])
+                if self.shadingMode == 'MLP_freenerf_Fea':
+                    ### increase the number of positional encoding
+                    if train_iter > 40000:
+                        view_pe, fea_pe = 8, 8
+                    elif train_iter > 30000:
+                        view_pe, fea_pe = 6, 6
+                    elif train_iter > 20000:
+                        view_pe, fea_pe = 4, 4
+                    elif train_iter > 10000:
+                        view_pe, fea_pe = 2, 2
+                    else:
+                        view_pe, fea_pe = 0, 0
+                    valid_rgbs = self.renderModule(xyz_sampled[app_mask], viewdirs[app_mask], app_features,
+                                                   v_pe=view_pe, f_pe=fea_pe)
+                else:
+                    valid_rgbs = self.renderModule(xyz_sampled[app_mask], viewdirs[app_mask], app_features)
+                rgb[app_mask] = valid_rgbs
+
+            vis_res = [xyz_sampled[app_mask], viewdirs[app_mask], rgb[app_mask]]
+            acc_map = torch.sum(weight, -1)
+            rgb_map = torch.sum(weight[..., None] * rgb, -2)
+
+            if white_bg or (is_train and torch.rand((1,)) < 0.5):
+                rgb_map = rgb_map + (1. - acc_map[..., None])
+
+            rgb_map = rgb_map.clamp(0, 1)
+
+            with torch.no_grad():
+                depth_map = torch.sum(weight * z_vals, -1)
+                depth_map = depth_map + (1. - acc_map) * rays_chunk[..., -1]
+
+        return rgb_map, depth_map, vis_res  # rgb, sigma, alpha, weight, bg_weight
 
 
 

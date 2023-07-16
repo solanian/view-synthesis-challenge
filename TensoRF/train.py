@@ -302,21 +302,21 @@ def reconstruction(args):
             summary_writer.add_scalar('test/psnr', np.mean(PSNRs_test), global_step=iteration)
             tensorf.save(f'{logfolder}/{args.expname}_{iteration}.th')
 
-        if iteration in update_AlphaMask_list:
-
-            if reso_cur[0] * reso_cur[1] * reso_cur[2]<256**3:# update volume resolution
-                reso_mask = reso_cur
-            new_aabb = tensorf.updateAlphaMask(tuple(reso_mask))
-            if iteration == update_AlphaMask_list[0]:
-                tensorf.shrink(new_aabb)
-                # tensorVM.alphaMask = None
-                L1_reg_weight = args.L1_weight_rest
-                print("continuing L1_reg_weight", L1_reg_weight)
-
-            # if not args.ndc_ray and iteration == update_AlphaMask_list[1]:
-            #    # filter rays outside the bbox
-            #    allrays,allrgbs = tensorf.filtering_rays(allrays,allrgbs)
-            #    trainingSampler = SimpleSampler(allrgbs.shape[0], args.batch_size)
+        # if iteration in update_AlphaMask_list:
+        #
+        #     if reso_cur[0] * reso_cur[1] * reso_cur[2]<256**3:# update volume resolution
+        #         reso_mask = reso_cur
+        #     new_aabb = tensorf.updateAlphaMask(tuple(reso_mask))
+        #     if iteration == update_AlphaMask_list[0]:
+        #         tensorf.shrink(new_aabb)
+        #         # tensorVM.alphaMask = None
+        #         L1_reg_weight = args.L1_weight_rest
+        #         print("continuing L1_reg_weight", L1_reg_weight)
+        #
+        #     # if not args.ndc_ray and iteration == update_AlphaMask_list[1]:
+        #     #    # filter rays outside the bbox
+        #     #    allrays,allrgbs = tensorf.filtering_rays(allrays,allrgbs)
+        #     #    trainingSampler = SimpleSampler(allrgbs.shape[0], args.batch_size)
 
         if iteration in upsamp_list:
             n_voxels = N_voxel_list.pop(0)

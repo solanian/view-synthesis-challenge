@@ -6,8 +6,9 @@ basedir = ./log
 n_iters = 50000
 batch_size = 4096
 
-N_voxel_init = 2097156 # 128**3
-N_voxel_final = 27000000 # 300**3
+N_voxel_init = 27000000 # 300**3
+N_voxel_final = 27000000 #27000000 # 300**3
+
 upsamp_list = [2000,3000,4000,5500,7000]
 update_AlphaMask_list = [2000,4000]
 
