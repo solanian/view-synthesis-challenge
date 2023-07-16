@@ -14,6 +14,10 @@ import datetime
 from dataLoader import dataset_dict
 import sys
 
+from models.tensoRF import TensorVM, TensorCP, raw2alpha, TensorVMSplit, AlphaGridMask
+from models.tensoRF_ZipNeRF import TensorVMSplit_ZipNeRF
+
+
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
