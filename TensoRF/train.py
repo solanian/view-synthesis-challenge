@@ -206,6 +206,10 @@ def reconstruction(args):
     PSNRs,PSNRs_test = [],[0]
 
     allrays, allrgbs = train_dataset.all_rays, train_dataset.all_rgbs
+    if args.model_name == "TensorVMSplit_ZipNeRF":
+        allorigins = train_dataset.all_origins
+        alldirections = train_dataset.all_directions
+        allallcam_dirs, allradii = train_dataset.all_cam_dirs, train_dataset.all_radii
     if not args.ndc_ray:
         allrays, allrgbs = tensorf.filtering_rays(allrays, allrgbs, bbox_only=True)
     trainingSampler = SimpleSampler(allrays.shape[0], args.batch_size)
@@ -225,10 +229,30 @@ def reconstruction(args):
         ray_idx = trainingSampler.nextids()
         rays_train, rgb_train = allrays[ray_idx], allrgbs[ray_idx].to(device)
 
-        # rgb_map, alphas_map, depth_map, weights, uncertainty
-        rgb_map, alphas_map, depth_map, weights, uncertainty = renderer(rays_train, tensorf, chunk=args.batch_size,
-                                N_samples=nSamples, white_bg = white_bg, ndc_ray=ndc_ray, device=device, is_train=True,
-                                train_iter=iteration)
+        if args.model_name == "TensorVMSplit_ZipNeRF":
+            rgb_train = allrgbs[ray_idx].to(device)
+            origins_train = allorigins[ray_idx].to(device)
+            # print(allrays.shape, allrgbs.shape, alldirections.shape, allallcam_dirs.shape)
+            origin_directions_train = alldirections[ray_idx]
+            cam_dirs_train, radii_train = allallcam_dirs[ray_idx], allradii[ray_idx]
+            rgb_map, alphas_map, depth_map, weights, uncertainty = zipnerf_renderer(rays_train, tensorf,
+                                                                                        chunk=args.batch_size,
+                                                                                        N_samples=nSamples,
+                                                                                        ndc_ray=ndc_ray,
+                                                                                        white_bg=white_bg,
+                                                                                        is_train=True,
+                                                                                        img_wh=[0,0],
+                                                                                        train_iter=iteration,
+                                                                                        device=device,
+                                                                                        origins=origins_train,
+                                                                                        origin_directions=origin_directions_train,
+                                                                                        cam_dirs=cam_dirs_train,
+                                                                                        radiis=radii_train)
+        else:
+            rgb_map, alphas_map, depth_map, weights, uncertainty = renderer(rays_train, tensorf, chunk=args.batch_size,
+                                    N_samples=nSamples, white_bg = white_bg, ndc_ray=ndc_ray, device=device, is_train=True,
+                                    train_iter=iteration)
+
         if args.loss_type == "MSE":
             loss = torch.mean((rgb_map - rgb_train) ** 2)
         elif args.loss_type == "RAW_NERF":

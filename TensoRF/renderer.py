@@ -6,6 +6,29 @@ from utils import *
 from dataLoader.ray_utils import ndc_rays_blender
 import csv
 
+
+def zipnerf_renderer(rays, tensorf, chunk=4096, N_samples=-1, ndc_ray=False, white_bg=True, is_train=False,
+                                img_wh=[0, 0], train_iter=0, device='cuda', origins=None, origin_directions=None,
+                              cam_dirs=None, radiis=None ):
+    rgbs, alphas, depth_maps, weights, uncertainties = [], [], [], [], []
+    N_rays_all = origins.shape[0]
+
+    for chunk_idx in range(N_rays_all // chunk + int(N_rays_all % chunk > 0)):
+        rays_chunk = rays[chunk_idx * chunk:(chunk_idx + 1) * chunk].to(device)
+        origins_chunk = origins[chunk_idx * chunk:(chunk_idx + 1) * chunk].to(device)
+        origin_directions_chunk = origin_directions[chunk_idx * chunk:(chunk_idx + 1) * chunk].to(device)
+        cam_dirs_chunk = cam_dirs[chunk_idx * chunk:(chunk_idx + 1) * chunk].to(device)
+        radii_chunk = radiis[chunk_idx * chunk:(chunk_idx + 1) * chunk].to(device)
+
+        rgb_map, depth_map, vis_res = tensorf(rays_chunk, is_train=is_train, white_bg=white_bg, ndc_ray=ndc_ray,
+                                                     N_samples=N_samples, train_iter=train_iter,
+                                                     origins=origins_chunk, origin_directions=origin_directions_chunk,
+                                                     cam_dirs=cam_dirs_chunk, radii=radii_chunk)
+        rgbs.append(rgb_map)
+        depth_maps.append(depth_map)
+
+    return torch.cat(rgbs), None, torch.cat(depth_maps), None, None
+
 def OctreeRender_trilinear_fast(rays, tensorf, chunk=4096, N_samples=-1, ndc_ray=False, white_bg=True, is_train=False,
                                 img_wh=[0,0], train_iter=0, device='cuda'):
 
@@ -56,7 +79,7 @@ def OctreeRender_one_cam_3d_vis(rays, tensorf, chunk=4096, N_samples=-1, ndc_ray
         for j in [near_far[0], near_far[1]]:
             points_cloud.append([ray_o[0]+d[0]*j, ray_o[1]+d[1]*j, ray_o[2]+d[2]*j, 1, 0, 1.0, 0, "view_dir"])
 
-    csv_file_path = "one_cam_points_cloud.csv"
+    csv_file_path = "exp/one_cam_points_cloud.csv"
     f = open(csv_file_path, 'a')
     writer = csv.writer(f)
     writer.writerows(points_cloud)
@@ -97,7 +120,7 @@ def OctreeRender_multi_cam_3d_vis(rays, tensorf, chunk=4096, N_samples=-1, ndc_r
         for j in [near_far[0], near_far[1]]:
             points_cloud.append([ray_o[0]+d[0]*j, ray_o[1]+d[1]*j, ray_o[2]+d[2]*j, 1, 0, 1.0, 0, "view_dir"])
 
-    csv_file_path = "multi_cam_points_cloud.csv"
+    csv_file_path = "exp/multi_cam_points_cloud.csv"
     f = open(csv_file_path, 'a')
     writer = csv.writer(f)
     writer.writerows(points_cloud)
@@ -119,6 +142,12 @@ def evaluation(test_dataset,tensorf, args, renderer, savePath=None, N_vis=5, prt
     except Exception:
         pass
 
+    all_origins = test_dataset.all_origins
+    all_directions = test_dataset.all_directions
+    all_cam_dirs = test_dataset.all_cam_dirs
+    all_radii = test_dataset.all_radii
+
+
     near_far = test_dataset.near_far
     img_eval_interval = 1 if N_vis < 0 else max(test_dataset.all_rays.shape[0] // N_vis,1)
     idxs = list(range(0, test_dataset.all_rays.shape[0], img_eval_interval))
@@ -126,10 +155,29 @@ def evaluation(test_dataset,tensorf, args, renderer, savePath=None, N_vis=5, prt
 
         W, H = test_dataset.img_wh
         rays = samples.view(-1,samples.shape[-1])
+        origins = torch.squeeze(all_origins,0) ## <- this code is for only one test image. it should be fixed!!!
+        origin_directions = torch.squeeze(all_directions,0) ## same
+        cam_dirs = torch.squeeze(all_cam_dirs,0) ## same
+        radii = torch.squeeze(all_radii,0) ## same
 
-        rgb_map, _, depth_map, _, _ = renderer(rays, tensorf, chunk=4096, N_samples=N_samples,
-                                        ndc_ray=ndc_ray, white_bg=white_bg, img_wh=test_dataset.img_wh, device=device,
-                                        train_iter=train_iter)
+
+        if args.model_name == "TensorVMSplit_ZipNeRF":
+            rgb_map, alphas_map, depth_map, weights, uncertainty = zipnerf_renderer(rays, tensorf,
+                                                                                        chunk=4096,
+                                                                                        N_samples=N_samples,
+                                                                                        ndc_ray=ndc_ray,
+                                                                                        white_bg=white_bg,
+                                                                                        is_train=False,
+                                                                                        img_wh=[0,0],
+                                                                                        train_iter=train_iter,
+                                                                                        device=device,
+                                                                                        origins=origins,
+                                                                                        origin_directions=origin_directions,
+                                                                                        cam_dirs=cam_dirs,
+                                                                                        radiis=radii)
+        else:
+            rgb_map, alphas_map, depth_map, weights, uncertainty = renderer(rays, tensorf, chunk=4096,
+                                    N_samples=N_samples, white_bg = white_bg, ndc_ray=ndc_ray, device=device, train_iter=train_iter)
 
         rgb_map = rgb_map.clamp(0.0, 1.0)
 
