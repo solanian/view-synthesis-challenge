@@ -102,6 +102,7 @@ def visualization(args):
     ckpt = torch.load(args.ckpt, map_location=device)
     kwargs = ckpt['kwargs']
     kwargs.update({'device': device})
+    kwargs.update({'frustums_vertices': train_dataset.frustums_vertices})
     tensorf = eval(args.model_name)(**kwargs)
     tensorf.load(ckpt)
 
