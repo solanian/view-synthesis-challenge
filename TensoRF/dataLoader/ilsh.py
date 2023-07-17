@@ -15,21 +15,21 @@ def normalize(v):
 
 def average_poses(poses):
     """
-	Calculate the average pose, which is then used to center all poses
-	using @center_poses. Its computation is as follows:
-	1. Compute the center: the average of pose centers.
-	2. Compute the z axis: the normalized average z axis.
-	3. Compute axis y': the average y axis.
-	4. Compute x' = y' cross product z, then normalize it as the x axis.
-	5. Compute the y axis: z cross product x.
+    Calculate the average pose, which is then used to center all poses
+    using @center_poses. Its computation is as follows:
+    1. Compute the center: the average of pose centers.
+    2. Compute the z axis: the normalized average z axis.
+    3. Compute axis y': the average y axis.
+    4. Compute x' = y' cross product z, then normalize it as the x axis.
+    5. Compute the y axis: z cross product x.
 
-	Note that at step 3, we cannot directly use y' as y axis since it's
-	not necessarily orthogonal to z axis. We need to pass from x to y.
-	Inputs:
-		poses: (N_images, 3, 4)
-	Outputs:
-		pose_avg: (3, 4) the average pose
-	"""
+    Note that at step 3, we cannot directly use y' as y axis since it's
+    not necessarily orthogonal to z axis. We need to pass from x to y.
+    Inputs:
+        poses: (N_images, 3, 4)
+    Outputs:
+        pose_avg: (3, 4) the average pose
+    """
     # 1. Compute the center
     center = poses[..., 3].mean(0)  # (3)
 
@@ -52,14 +52,14 @@ def average_poses(poses):
 
 def center_poses(poses, blender2opencv):
     """
-	Center the poses so that we can use NDC.
-	See https://github.com/bmild/nerf/issues/34
-	Inputs:
-		poses: (N_images, 3, 4)
-	Outputs:
-		poses_centered: (N_images, 3, 4) the centered poses
-		pose_avg: (3, 4) the average pose
-	"""
+    Center the poses so that we can use NDC.
+    See https://github.com/bmild/nerf/issues/34
+    Inputs:
+        poses: (N_images, 3, 4)
+    Outputs:
+        poses_centered: (N_images, 3, 4) the centered poses
+        pose_avg: (3, 4) the average pose
+    """
     poses = poses @ blender2opencv
     pose_avg = average_poses(poses)  # (3, 4)
     pose_avg_homo = np.eye(4)
@@ -118,14 +118,56 @@ def get_spiral(c2ws_all, near_fars, rads_scale=1.0, N_views=120):
     return np.stack(render_poses)
 
 
+def intrinsic_matrix(fx, fy, cx, cy):
+    """Intrinsic matrix for a pinhole camera in OpenCV coordinate system."""
+    return np.array([
+        [fx, 0, cx],
+        [0, fy, cy],
+        [0, 0, 1.],
+    ])
+
+
+def get_camtopix(focal, width, height):
+    """Intrinsic matrix for a perfect pinhole camera."""
+    return intrinsic_matrix(focal, focal, width * .5, height * .5)
+
+
+def get_pixtocam(focal, width, height):
+    """Inverse intrinsic matrix for a perfect pinhole camera."""
+    return np.linalg.inv(get_camtopix)
+
+
+# Calculate frustum vertices for a given pose and intrinsics
+def frustum_vertices(pose, intrinsics, near, far):
+    view_matrix_inv = np.linalg.inv(pose)
+    fx, fy, cx, cy = intrinsics[0, 0], intrinsics[1, 1], intrinsics[0, 2], intrinsics[1, 2]
+    near_scale = near / fx
+    near_vertices = np.array([[-cx * near_scale, -cy * near_scale, -near], [cx * near_scale, -cy * near_scale, -near], [cx * near_scale, cy * near_scale, -near], [-cx * near_scale, cy * near_scale, -near]])
+    far_scale = far / fx
+    far_vertices = np.array([[-cx * far_scale, -cy * far_scale, -far], [cx * far_scale, -cy * far_scale, -far], [cx * far_scale, cy * far_scale, -far], [-cx * far_scale, cy * far_scale, -far]])
+    vertices = np.vstack((near_vertices, far_vertices))
+    # vertices = (vertices.T / vertices[:, 2]).T
+    vertices_hom = np.hstack((vertices, np.ones((8, 1))))
+    return pose @ vertices_hom.T
+
+
+def projection_matrix_from_intrinsics(intrinsics, near, far):
+    fx, fy, cx, cy = intrinsics[0, 0], intrinsics[1, 1], intrinsics[0, 2], intrinsics[1, 2]
+    proj_matrix = np.array([[fx, 0, cx, 0],
+                            [0, fy, cy, 0],
+                            [0, 0, -(far + near) / (far - near), -2 * far * near / (far - near)],
+                            [0, 0, -1, 0]])
+    return proj_matrix
+
+
 class ILSHDataset(Dataset):
     def __init__(self, datadir, split='train', downsample=1.0, is_stack=False, hold_every=0, bg_remove=True,
-                 is_ndc=False, use_aug_pose=False):
+                is_ndc=False, use_aug_pose=False):
         """
-		spheric_poses: whether the images are taken in a spheric inward-facing manner
-					default: False (forward-facing)
-		val_num: number of val images (used for multigpu training, validate same image for all gpus)
-		"""
+        spheric_poses: whether the images are taken in a spheric inward-facing manner
+                    default: False (forward-facing)
+        val_num: number of val images (used for multigpu training, validate same image for all gpus)
+        """
 
         self.root_dir = datadir
         self.split = split
@@ -136,13 +178,14 @@ class ILSHDataset(Dataset):
         self.use_bg_remove = bg_remove
         self.is_ndc = is_ndc
         self.use_aug_pose = use_aug_pose
+        self.near_far = [3.5, 5.5]  # scene bound
 
         self.blender2opencv = np.eye(4)  # np.array([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
+        self.frustums_vertices = []
         self.read_meta()
         self.white_bg = False
 
         #         self.near_far = [np.min(self.near_fars[:,0]),np.max(self.near_fars[:,1])]
-        self.near_far = [3.5, 5.5]  # scene bound
 
         if self.is_ndc:
             self.near_far = [0, 1.0]
@@ -154,7 +197,7 @@ class ILSHDataset(Dataset):
 
     def read_meta(self):
         poses_bounds = np.load(os.path.join(self.root_dir, 'poses_bounds_train.npy'))  # (N_images, 17)
-        poses_bounds_val = np.load(os.path.join(self.root_dir, "poses_bounds_val.npy"))  # (N_images, 17)
+        poses_bounds_val = np.load(os.path.join(self.root_dir, "poses_bounds_test.npy"))  # (N_images, 17)
         if self.use_bg_remove:
             self.image_paths = sorted(glob.glob(os.path.join(self.root_dir, 'images_bg_remove/*')))
         else:
@@ -178,6 +221,7 @@ class ILSHDataset(Dataset):
         H, W, self.focal = poses[0, :, -1]  # original intrinsics, same for all images
         self.img_wh = np.array([int(W / self.downsample), int(H / self.downsample)])
         self.focal = [self.focal * self.img_wh[0] / W, self.focal * self.img_wh[1] / H]
+        camtopix = get_camtopix(self.focal[0], W, H)
 
         # Step 2: correct poses
         # Original poses has rotation in form "down right back", change to "right up back"
@@ -276,9 +320,6 @@ class ILSHDataset(Dataset):
             #     rays_o, rays_d = ndc_rays_blender(H, W, self.focal[0], 1.0, rays_o, rays_d)
             self.all_rays += [torch.cat([rays_o, rays_d], 1)]  # (h*w, 6)
 
-
-
-
         # print(self.all_radii)
         if not self.is_stack:
             self.all_rays = torch.cat(self.all_rays, 0)  # (len(self.meta['frames])*h*w, 3)
@@ -290,7 +331,7 @@ class ILSHDataset(Dataset):
         else:
             self.all_rays = torch.stack(self.all_rays, 0)  # (len(self.meta['frames]),h,w, 3)
             self.all_rgbs = torch.stack(self.all_rgbs, 0).reshape(-1, *self.img_wh[::-1],
-                                                                  3)  # (len(self.meta['frames]),h,w,3)
+                                                                3)  # (len(self.meta['frames]),h,w,3)
             self.all_origins = torch.stack(self.all_origins, 0)
             self.all_directions = torch.stack(self.all_directions, 0)
             self.all_cam_dirs = torch.stack(self.all_cam_dirs, 0)
@@ -300,6 +341,34 @@ class ILSHDataset(Dataset):
         if self.use_bg_remove and self.split == "train":
             self.mask = torch.where(torch.all(self.all_rgbs != torch.tensor([0., 0., 0.]), dim=1))[0]
             print("mask shape :{}".format(self.mask.shape))
+            
+        for i, pose in enumerate(self.poses):
+            self.frustums_vertices.append(frustum_vertices(np.vstack((pose, np.array([0, 0, 0, 1]))), camtopix, self.near_far[0], self.near_far[1]) / scale_factor)
+
+        self.frustums_vertices = np.array(self.frustums_vertices)[using_indices]
+
+        if False:
+            import plotly.graph_objects as go
+            import plotly.express as px
+            # Add a frustum trace to the figure
+            def add_frustum_trace(fig, vertices, idx):
+                color_map = px.colors.qualitative.Alphabet
+                indices = [(0,1,2),(0,2,3),(4,5,6),(4,6,7),(0,1,5),(0,4,5),(2,6,7),(2,3,7),(0,3,7),(0,4,7),(1,5,6),(1,2,6)]  # indices of corner vertices (to create a mesh)
+                fig.add_trace(go.Mesh3d(x=vertices[0], y=vertices[1], z=vertices[2], i=[index[0] for index in indices], j=[index[1] for index in indices], k=[index[2] for index in indices], opacity=0.1, name=f'Frustum {idx + 1}', color=color_map[idx]))
+            # Create a Plotly figure
+            fig = go.Figure()
+            # Add all frustums to the figure
+            for i, vertices in enumerate(self.frustums_vertices):
+                add_frustum_trace(fig, vertices, i)
+
+            # Configure the 3D scene and display the figure
+            fig.update_layout(scene=dict(aspectmode='data'))
+            fig.write_html("frustums.html")
+
+
+    def get_frustum_vertices(self):
+        return self.frustums_vertices
+
 
     def define_transforms(self):
         self.transform = T.ToTensor()
@@ -314,10 +383,10 @@ class ILSHDataset(Dataset):
         if self.use_bg_remove and self.split == "train":
             idx = self.mask[idx]
         sample = {'rays': self.all_rays[idx],
-                  'rgbs': self.all_rgbs[idx],
-                  'directions': self.all_directions[idx],
-                  'origins': self.all_origins[idx],
-                  'cam_dirs': self.all_cam_dirs[idx],
-                  'radii': self.all_radii[idx]
-                  }
+                'rgbs': self.all_rgbs[idx],
+                'directions': self.all_directions[idx],
+                'origins': self.all_origins[idx],
+                'cam_dirs': self.all_cam_dirs[idx],
+                'radii': self.all_radii[idx]
+                }
         return sample

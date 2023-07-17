@@ -11,6 +11,14 @@ from models.tensorBase import raw2alpha
 class TensorVMSplit_ZipNeRF(TensorVMSplit):
     def __init__(self, aabb, gridSize, device, **kargs):
         super(TensorVMSplit_ZipNeRF, self).__init__(aabb, gridSize, device, **kargs)
+        self.rgb_mix = nn.Sequential(
+        #   nn.Linear(2, 4),
+        #   nn.ReLU(),
+        #   nn.Linear(4, 2),
+        #   nn.ReLU(),
+          nn.Linear(6, 3),
+        #   nn.ReLU(),
+        ).to(device)
 
     def cast_rays_for_zip_nerf(self, tdist, origins, directions, cam_dirs, radii, rand=True, n=7, m=3, std_scale=0.5, **kwargs):
         """Cast rays (cone- or cylinder-shaped) and featurize sections of it.
@@ -70,6 +78,18 @@ class TensorVMSplit_ZipNeRF(TensorVMSplit):
         # trimesh.Trimesh(means.reshape(-1, 3).detach().cpu().numpy()).export("test.ply", "ply")
 
         return means, stds
+    
+    def get_optparam_groups(self, lr_init_spatialxyz=0.02, lr_init_network=0.001):
+        grad_vars = [{'params': self.density_line, 'lr': lr_init_spatialxyz},
+                     {'params': self.density_plane, 'lr': lr_init_spatialxyz},
+                     {'params': self.app_line, 'lr': lr_init_spatialxyz},
+                     {'params': self.app_plane, 'lr': lr_init_spatialxyz},
+                     {'params': self.basis_mat.parameters(), 'lr': lr_init_network}]
+        if isinstance(self.renderModule1, torch.nn.Module):
+            grad_vars += [{'params': self.renderModule1.parameters(), 'lr': lr_init_network}]
+        if isinstance(self.renderModule2, torch.nn.Module):
+            grad_vars += [{'params': self.renderModule2.parameters(), 'lr': lr_init_network}]
+        return grad_vars
 
     def forward(self, rays_chunk, white_bg=True, is_train=False, ndc_ray=False, N_samples=-1, train_iter=0,
                 origins=None, origin_directions=None, cam_dirs=None, radii=None, rand=True, no_warp=False):
@@ -84,12 +104,6 @@ class TensorVMSplit_ZipNeRF(TensorVMSplit):
         xyz_sampled, z_vals, ray_valid = self.sample_ray(origins, viewdirs, is_train=is_train, N_samples=N_samples)
         dists = torch.cat((z_vals[:, 1:] - z_vals[:, :-1], torch.zeros_like(z_vals[:, :1])), dim=-1)
 
-        ### zip-nerf encoding - Start ##########################
-        means, stds = self.cast_rays_for_zip_nerf(z_vals, origins, viewdirs, cam_dirs, radii,
-                                                   rand=rand, n=7, m=3, std_scale=0.5)
-
-        means = torch.cat([means, torch.unsqueeze(means[:, -1,...], 1)], 1).float()
-        stds = torch.cat([stds, torch.unsqueeze(stds[:, -1,...], 1)], 1).float()
         #
         # # print(viewdirs.shape, means.shape, stds.shape) # torch.Size([4096, 3]) torch.Size([4096, 461, 6, 3]) torch.Size([4096, 461, 6])
         # x = self.predict_density(means, stds, rand=rand, no_warp=no_warp)
@@ -100,9 +114,7 @@ class TensorVMSplit_ZipNeRF(TensorVMSplit):
         # dists = dists[:,:-1]
         # print(dists.shape)
         # print("$$$$$$$$")
-        ### zip-nerf encoding - End ############################
-        viewdirs = viewdirs.view(-1, 1, 3).expand(xyz_sampled.shape)
-
+        
         sigma = torch.zeros(xyz_sampled.shape[:-1], device=xyz_sampled.device)
         rgb = torch.zeros((*xyz_sampled.shape[:2], 3), device=xyz_sampled.device)
 
@@ -112,6 +124,16 @@ class TensorVMSplit_ZipNeRF(TensorVMSplit):
 
             validsigma = self.feature2density(sigma_feature)
             sigma[ray_valid] = validsigma
+            
+		### zip-nerf encoding - Start ##########################
+        means, stds = self.cast_rays_for_zip_nerf(z_vals, origins, viewdirs, cam_dirs, radii,
+                                                   rand=rand, n=7, m=3, std_scale=0.5)
+
+        means = torch.cat([means, torch.unsqueeze(means[:, -1,...], 1)], 1).float()
+        stds = torch.cat([stds, torch.unsqueeze(stds[:, -1,...], 1)], 1).float()
+        
+		### zip-nerf encoding - End ############################
+        viewdirs = viewdirs.view(-1, 1, 3).expand(xyz_sampled.shape)
         # print("@@@@@")
         alpha, weight, bg_weight = raw2alpha(sigma, dists * self.distance_scale)
 
@@ -135,6 +157,24 @@ class TensorVMSplit_ZipNeRF(TensorVMSplit):
                                                v_pe=view_pe, f_pe=fea_pe)
             elif self.shadingMode == 'MLP_ZipNeRF_Fea':
                 valid_rgbs = self.renderModule(means[app_mask], stds[app_mask], app_features)
+            elif self.shadingMode == 'mixed':
+                valid_rgbs1 = self.renderModule1(means[app_mask], stds[app_mask], app_features)
+                ### increase the number of positional encoding
+                if train_iter > 40000:
+                    view_pe, fea_pe = 8, 8
+                elif train_iter > 30000:
+                    view_pe, fea_pe = 6, 6
+                elif train_iter > 20000:
+                    view_pe, fea_pe = 4, 4
+                elif train_iter > 10000:
+                    view_pe, fea_pe = 2, 2
+                else:
+                    view_pe, fea_pe = 0, 0
+                valid_rgbs2 = self.renderModule2(xyz_sampled[app_mask], viewdirs[app_mask], app_features,
+                                               v_pe=view_pe, f_pe=fea_pe)
+                valid_rgbs = valid_rgbs1 + valid_rgbs2
+                # valid_rgbs = torch.stack((valid_rgbs1, valid_rgbs2), dim=-1)
+                # valid_rgbs = self.rgb_mix(valid_rgbs).squeeze(-1)
             else:
                 valid_rgbs = self.renderModule(xyz_sampled[app_mask], viewdirs[app_mask], app_features)
             rgb[app_mask] = valid_rgbs
