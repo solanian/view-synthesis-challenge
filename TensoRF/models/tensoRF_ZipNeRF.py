@@ -16,8 +16,12 @@ class TensorVMSplit_ZipNeRF(TensorVMSplit):
         #   nn.ReLU(),
         #   nn.Linear(4, 2),
         #   nn.ReLU(),
+          nn.Linear(512, 256),
+          nn.ReLU(inplace=True),
           nn.Linear(256, 128),
           nn.ReLU(inplace=True),
+        #   nn.Linear(128, 64),
+        #   nn.ReLU(inplace=True),
           nn.Linear(128, 3),
           nn.Sigmoid()
         ).to(device)

@@ -78,9 +78,12 @@ class MLPRender_freenerf_Fea(torch.nn.Module):
         # self.v_pe=None
         # self.f_pe=None
         # self.change_layerC()
-        layer1 = torch.nn.Linear(self.in_mlpC, featureC)
-        layer2 = torch.nn.Linear(featureC, featureC)
-        layer3 = torch.nn.Linear(featureC, featureC)
+        # layer1 = torch.nn.Linear(self.in_mlpC, featureC)
+        # layer2 = torch.nn.Linear(featureC, featureC)
+        # layer3 = torch.nn.Linear(featureC, featureC)
+        layer1 = torch.nn.Linear(self.in_mlpC, 64)
+        layer2 = torch.nn.Linear(64, 128)
+        layer3 = torch.nn.Linear(128, 256)
 
         self.mlp = torch.nn.Sequential(
             layer1, torch.nn.ReLU(inplace=True), 
@@ -196,12 +199,12 @@ class MLPRender_ZipNeRF_PE(torch.nn.Module):
         self.in_mlpC = 37
         self.viewpe = viewpe
         self.pospe = pospe
-        layer1 = torch.nn.Linear(self.in_mlpC, featureC)
-        layer2 = torch.nn.Linear(featureC, featureC)
-        layer3 = torch.nn.Linear(featureC,featureC)
-        # layer1 = torch.nn.Linear(self.in_mlpC, 64)
-        # layer2 = torch.nn.Linear(64, 128)
-        # layer3 = torch.nn.Linear(128, 256)
+        # layer1 = torch.nn.Linear(self.in_mlpC, featureC)
+        # layer2 = torch.nn.Linear(featureC, featureC)
+        # layer3 = torch.nn.Linear(featureC,featureC)
+        layer1 = torch.nn.Linear(self.in_mlpC, 64)
+        layer2 = torch.nn.Linear(64, 128)
+        layer3 = torch.nn.Linear(128, 256)
         # layer4 = torch.nn.Linear(256, 3)
         self.mlp = torch.nn.Sequential(
             layer1, torch.nn.ReLU(inplace=True), 
