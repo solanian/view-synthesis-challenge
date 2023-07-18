@@ -195,12 +195,10 @@ class MLPRender_ZipNeRF_PE(torch.nn.Module):
         self.in_mlpC = 37
         self.viewpe = viewpe
         self.pospe = pospe
-        layer1 = torch.nn.Linear(self.in_mlpC, 64)
-        layer2 = torch.nn.Linear(64, 128)
-        layer3 = torch.nn.Linear(128, 256)
-        layer4 = torch.nn.Linear(256, 3)
-        self.mlp = torch.nn.Sequential(layer1, torch.nn.ReLU(inplace=True),
-                                       layer2,layer3,layer4)
+        layer1 = torch.nn.Linear(self.in_mlpC, featureC)
+        layer2 = torch.nn.Linear(featureC, featureC)
+        layer3 = torch.nn.Linear(featureC,3)
+        self.mlp = torch.nn.Sequential(layer1, torch.nn.ReLU(inplace=True), layer2, torch.nn.ReLU(inplace=True), layer3)
         torch.nn.init.constant_(self.mlp[-1].bias, 0)
 
     def forward(self, means, stds, features):
