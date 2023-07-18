@@ -195,10 +195,12 @@ class MLPRender_ZipNeRF_PE(torch.nn.Module):
         self.in_mlpC = 37
         self.viewpe = viewpe
         self.pospe = pospe
-        layer1 = torch.nn.Linear(self.in_mlpC, featureC)
-        layer2 = torch.nn.Linear(featureC, featureC)
-        layer3 = torch.nn.Linear(featureC,3)
-        self.mlp = torch.nn.Sequential(layer1, torch.nn.ReLU(inplace=True), layer2, torch.nn.ReLU(inplace=True), layer3)
+        layer1 = torch.nn.Linear(self.in_mlpC, 64)
+        layer2 = torch.nn.Linear(64, 128)
+        layer3 = torch.nn.Linear(128, 256)
+        layer4 = torch.nn.Linear(256, 3)
+        self.mlp = torch.nn.Sequential(layer1, torch.nn.ReLU(inplace=True),
+                                       layer2,layer3,layer4)
         torch.nn.init.constant_(self.mlp[-1].bias, 0)
 
     def forward(self, means, stds, features):
@@ -308,7 +310,7 @@ class TensorBase(torch.nn.Module):
                             frustum_vertices[plane_indices[:, 2]] - frustum_vertices[plane_indices[:, 0]], dim=1)
         plane_coefficients = -torch.sum(planes * frustum_vertices[plane_indices[:, 0]], dim=1)
         # Compute signed distances from point to each frustum plane
-        signed_dists = (planes @ points.T) + plane_coefficients.unsqueeze(1)
+        signed_dists = (planes @ points.T) + plane_coefficients.unsqueeze(1).float()
         # Point is inside the frustum if the signed distances to all frustum planes are non-positive
         visible = (signed_dists <= 0).all(dim=0)
         return visible
@@ -316,7 +318,7 @@ class TensorBase(torch.nn.Module):
 
     def filter_points_by_visibility(self, points, min_visible_frustums):
         original_shape = points.shape
-        points = points.reshape(-1, 3)
+        points = points.reshape(-1, 3).float()
         filter_mask = torch.ones_like(points, dtype=bool)
         # points = points.cpu().numpy()
         invisible_frustums = torch.sum(torch.stack([self.check_points_in_frustum(points, frustum_vertices) for frustum_vertices in self.frustums_vertices]), dim=0)
