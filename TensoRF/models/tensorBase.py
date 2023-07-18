@@ -80,10 +80,13 @@ class MLPRender_freenerf_Fea(torch.nn.Module):
         # self.change_layerC()
         layer1 = torch.nn.Linear(self.in_mlpC, featureC)
         layer2 = torch.nn.Linear(featureC, featureC)
-        layer3 = torch.nn.Linear(featureC, 3)
+        layer3 = torch.nn.Linear(featureC, featureC)
 
-        self.mlp = torch.nn.Sequential(layer1, torch.nn.ReLU(inplace=True), layer2, torch.nn.ReLU(inplace=True), layer3)
-        torch.nn.init.constant_(self.mlp[-1].bias, 0)
+        self.mlp = torch.nn.Sequential(
+            layer1, torch.nn.ReLU(inplace=True), 
+            layer2, torch.nn.ReLU(inplace=True), 
+            layer3, torch.nn.ReLU(inplace=True), )
+        # torch.nn.init.constant_(self.mlp[-1].bias, 0)
 
     def forward(self, pts, viewdirs, features, v_pe=0, f_pe=0):
         # v_pe = v_pe  # Assign v_pe value from forward method to self.v_pe
@@ -111,7 +114,7 @@ class MLPRender_freenerf_Fea(torch.nn.Module):
 
         mlp_in = torch.cat(indata, dim=-1)
         rgb = self.mlp(mlp_in)
-        rgb = torch.sigmoid(rgb)
+        # rgb = torch.sigmoid(rgb)
 
         return rgb
 
@@ -172,8 +175,6 @@ class MLPRender_PE(torch.nn.Module):
 class MLPRender_ZipNeRF_PE(torch.nn.Module):
     def __init__(self,inChanel, viewpe=6, pospe=6, featureC=128):
         super(MLPRender_ZipNeRF_PE, self).__init__()
-
-
         self.grid_num_levels = 10
         self.grid_level_dim = 1
         self.grid_base_resolution = 16
@@ -197,9 +198,17 @@ class MLPRender_ZipNeRF_PE(torch.nn.Module):
         self.pospe = pospe
         layer1 = torch.nn.Linear(self.in_mlpC, featureC)
         layer2 = torch.nn.Linear(featureC, featureC)
-        layer3 = torch.nn.Linear(featureC,3)
-        self.mlp = torch.nn.Sequential(layer1, torch.nn.ReLU(inplace=True), layer2, torch.nn.ReLU(inplace=True), layer3)
-        torch.nn.init.constant_(self.mlp[-1].bias, 0)
+        layer3 = torch.nn.Linear(featureC,featureC)
+        # layer1 = torch.nn.Linear(self.in_mlpC, 64)
+        # layer2 = torch.nn.Linear(64, 128)
+        # layer3 = torch.nn.Linear(128, 256)
+        # layer4 = torch.nn.Linear(256, 3)
+        self.mlp = torch.nn.Sequential(
+            layer1, torch.nn.ReLU(inplace=True), 
+            layer2, torch.nn.ReLU(inplace=True), 
+            layer3, torch.nn.ReLU(inplace=True),
+		)
+        # torch.nn.init.constant_(self.mlp[-1].bias, 0)
 
     def forward(self, means, stds, features):
         indata = [features]
@@ -221,7 +230,7 @@ class MLPRender_ZipNeRF_PE(torch.nn.Module):
 
 
         rgb = self.mlp(mlp_in)
-        rgb = torch.sigmoid(rgb)
+        # rgb = torch.sigmoid(rgb)
         return rgb
 
 

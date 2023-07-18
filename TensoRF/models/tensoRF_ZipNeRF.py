@@ -16,9 +16,13 @@ class TensorVMSplit_ZipNeRF(TensorVMSplit):
         #   nn.ReLU(),
         #   nn.Linear(4, 2),
         #   nn.ReLU(),
-          nn.Linear(6, 3),
-        #   nn.ReLU(),
+          nn.Linear(256, 128),
+          nn.ReLU(inplace=True),
+          nn.Linear(128, 3),
+          nn.Sigmoid()
         ).to(device)
+        torch.nn.init.constant_(self.rgb_mix[-2].bias, 0)
+        self.init_NSamples = None
 
     def cast_rays_for_zip_nerf(self, tdist, origins, directions, cam_dirs, radii, rand=True, n=7, m=3, std_scale=0.5, **kwargs):
         """Cast rays (cone- or cylinder-shaped) and featurize sections of it.
@@ -93,7 +97,8 @@ class TensorVMSplit_ZipNeRF(TensorVMSplit):
 
     def forward(self, rays_chunk, white_bg=True, is_train=False, ndc_ray=False, N_samples=-1, train_iter=0,
                 origins=None, origin_directions=None, cam_dirs=None, radii=None, rand=True, no_warp=False):
-
+        if self.init_NSamples is None:
+            self.init_NSamples = self.nSamples
         origins = rays_chunk[:, :3]
         before_viewdirs = rays_chunk[:, 3:6]
 
@@ -126,7 +131,7 @@ class TensorVMSplit_ZipNeRF(TensorVMSplit):
             sigma[ray_valid] = validsigma
             
 		### zip-nerf encoding - Start ##########################
-        means, stds = self.cast_rays_for_zip_nerf(z_vals, origins, viewdirs, cam_dirs, radii,
+        means, stds = self.cast_rays_for_zip_nerf(z_vals, origins, viewdirs, cam_dirs, radii * float(self.init_NSamples) / float(self.nSamples),
                                                    rand=rand, n=7, m=3, std_scale=0.5)
 
         means = torch.cat([means, torch.unsqueeze(means[:, -1,...], 1)], 1).float()
@@ -172,9 +177,10 @@ class TensorVMSplit_ZipNeRF(TensorVMSplit):
                     view_pe, fea_pe = 0, 0
                 valid_rgbs2 = self.renderModule2(xyz_sampled[app_mask], viewdirs[app_mask], app_features,
                                                v_pe=view_pe, f_pe=fea_pe)
-                valid_rgbs = valid_rgbs1 + valid_rgbs2
-                # valid_rgbs = torch.stack((valid_rgbs1, valid_rgbs2), dim=-1)
-                # valid_rgbs = self.rgb_mix(valid_rgbs).squeeze(-1)
+                # valid_rgbs = valid_rgbs1 + valid_rgbs2
+                # valid_rgbs = torch.max_pool1d(torch.stack((valid_rgbs1, valid_rgbs2), dim=-1), 2).squeeze(-1)
+                valid_rgbs = torch.cat((valid_rgbs1, valid_rgbs2), dim=-1)
+                valid_rgbs = self.rgb_mix(valid_rgbs).squeeze(-1)
             else:
                 valid_rgbs = self.renderModule(xyz_sampled[app_mask], viewdirs[app_mask], app_features)
             rgb[app_mask] = valid_rgbs
