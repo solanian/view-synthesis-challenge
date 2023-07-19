@@ -56,13 +56,6 @@ ENV CMAKE_PREFIX_PATH="$(dirname $(which conda))/../"
 
 CMD mkdir -p /workspace
 
-# Install ZIP-NeRF Requirements
-WORKDIR /workspace
-RUN git clone https://github.com/SuLvXiangXin/zipnerf-pytorch.git
-WORKDIR /workspace/zipnerf-pytorch
-RUN pip install -r requirements.txt
-RUN pip install ./gridencoder
-
 # Install GeoNeRF Requirements
 WORKDIR /workspace
 RUN git clone https://github.com/idiap/GeoNeRF.git
@@ -79,6 +72,13 @@ RUN git clone -b 2.0.4 https://github.com/Syllo/nvtop.git && \
     sudo make install && \
     cd ../.. && \
     rm -rf nvtop
+
+# # Install ZIP-NeRF Requirements
+# WORKDIR /workspace
+# RUN git clone https://github.com/SuLvXiangXin/zipnerf-pytorch.git
+# WORKDIR /workspace/zipnerf-pytorch
+# RUN pip install -r requirements.txt
+# RUN pip install ./gridencoder
 
 # Install tmux-beautify
 RUN git clone https://github.com/gpakosz/.tmux.git ~/.oh-my-tmux \
