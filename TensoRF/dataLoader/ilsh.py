@@ -161,7 +161,7 @@ def projection_matrix_from_intrinsics(intrinsics, near, far):
 
 
 class ILSHDataset(Dataset):
-    def __init__(self, datadir, split='train', downsample=1.0, is_stack=False, hold_every=0, bg_remove=True,
+    def __init__(self, datadir, split='train', downsample=1.0, is_stack=False, hold_every=-1, bg_remove=True,
                 is_ndc=False, use_aug_pose=False):
         """
         spheric_poses: whether the images are taken in a spheric inward-facing manner
@@ -210,7 +210,7 @@ class ILSHDataset(Dataset):
 
         poses = poses_bounds[:, :15].reshape(-1, 3, 5)  # (N_images, 3, 5)
 
-        poses_val = poses_bounds_val[:1, :15].reshape(-1, 3, 5)  # (N_images, 3, 5)
+        poses_val = poses_bounds_val[1:, :15].reshape(-1, 3, 5)  # (N_images, 3, 5)
         num_val = len(poses_val)
 
         # self.near_fars = poses_bounds[:, -2:]  # (N_images, 2)
