@@ -210,7 +210,7 @@ class ILSHDataset(Dataset):
 
         poses = poses_bounds[:, :15].reshape(-1, 3, 5)  # (N_images, 3, 5)
 
-        poses_val = poses_bounds_val[:, :15].reshape(-1, 3, 5)  # (N_images, 3, 5)
+        poses_val = poses_bounds_val[:1, :15].reshape(-1, 3, 5)  # (N_images, 3, 5)
         num_val = len(poses_val)
 
         # self.near_fars = poses_bounds[:, -2:]  # (N_images, 2)
