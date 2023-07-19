@@ -56,6 +56,13 @@ ENV CMAKE_PREFIX_PATH="$(dirname $(which conda))/../"
 
 CMD mkdir -p /workspace
 
+# Install ZIP-NeRF Requirements
+WORKDIR /workspace
+RUN git clone https://github.com/SuLvXiangXin/zipnerf-pytorch.git
+WORKDIR /workspace/zipnerf-pytorch
+RUN pip install -r requirements.txt
+RUN pip install ./gridencoder
+
 # Install GeoNeRF Requirements
 WORKDIR /workspace
 RUN git clone https://github.com/idiap/GeoNeRF.git
