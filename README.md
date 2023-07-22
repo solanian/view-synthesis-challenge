@@ -4,6 +4,12 @@
 ./setup_challenge_dataset.sh
 ```
 
+# setup requirments
+
+```
+./setup_requirement.sh
+```
+
 # train TensoRF
 
 ```
