@@ -154,7 +154,7 @@ class ILSHDataset(Dataset):
 
     def read_meta(self):
         poses_bounds = np.load(os.path.join(self.root_dir, 'poses_bounds_train.npy'))  # (N_images, 17)
-        poses_bounds_val = np.load(os.path.join(self.root_dir, "poses_bounds_val.npy"))  # (N_images, 17)
+        poses_bounds_val = np.load(os.path.join(self.root_dir, "poses_bounds_test.npy"))  # (N_images, 17)
         if self.use_bg_remove:
             self.image_paths = sorted(glob.glob(os.path.join(self.root_dir, 'images_bg_remove/*')))
         else:
@@ -167,7 +167,7 @@ class ILSHDataset(Dataset):
 
         poses = poses_bounds[:, :15].reshape(-1, 3, 5)  # (N_images, 3, 5)
 
-        poses_val = poses_bounds_val[:, :15].reshape(-1, 3, 5)  # (N_images, 3, 5)
+        poses_val = poses_bounds_val[:1, :15].reshape(-1, 3, 5)  # (N_images, 3, 5)
         num_val = len(poses_val)
 
         # self.near_fars = poses_bounds[:, -2:]  # (N_images, 2)

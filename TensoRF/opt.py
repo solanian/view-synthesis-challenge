@@ -14,6 +14,8 @@ def config_parser(cmd=None):
                         help='input data directory')
     parser.add_argument("--progress_refresh_rate", type=int, default=10,
                         help='how many iterations to show psnrs or iters')
+    parser.add_argument("--hold_every", type=int, default=0,
+                        help='0 for val -1 for test')
 
     parser.add_argument('--with_depth', action='store_true')
     parser.add_argument('--downsample_train', type=float, default=1.0)

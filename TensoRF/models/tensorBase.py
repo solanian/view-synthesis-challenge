@@ -276,7 +276,7 @@ class TensorBase(torch.nn.Module):
         self.fea2denseAct = fea2denseAct
 
         self.near_far = near_far
-        # self.near_far = [3.75,3.78]
+        #self.near_far = [3.6,3.78]
         print("@@@ near_far :{} ".format(self.near_far))  # before :3.5, 7.0
         self.step_ratio = step_ratio
 

@@ -95,8 +95,8 @@ def render_test(args):
 
 def visualization(args):
     dataset = dataset_dict[args.dataset_name]
-    test_dataset = dataset(args.datadir, split='test', downsample=args.downsample_train, is_stack=True)
-    # train_dataset = dataset(args.datadir, split='train', downsample=args.downsample_train, is_stack=True) #stack TRUE!!
+    test_dataset = dataset(args.datadir, split='test', downsample=args.downsample_train, hold_every=args.hold_every, is_stack=True)
+    # train_dataset = dataset(args.datadir, split='train', downsample=args.downsample_train, hold_every=args.hold_every, =True) #stack TRUE!!
     white_bg = test_dataset.white_bg
     ndc_ray = args.ndc_ray
     if not os.path.exists(args.ckpt):
