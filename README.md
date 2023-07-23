@@ -19,6 +19,7 @@ python train.py --config configs/submit_result/ilsh_002_00.txt
 ```
 
 # Rendering
+### notice we rendering near_far = [3.6, 3.8] plz change (TensoRF/models/tensorBase.py#L275C1-L275C33)
 ```
 python train.py --config <path the config> --ckpt <path the ckpt>  --render_visual 1
 
