@@ -8,7 +8,7 @@ weight_path="/home/ubuntu/view-synthesis-challenge/TensoRF/log"
 for file in "${files_and_dirs[@]}"
 do
     # Extract the filename from the file path
-    filename=$(basename "$file")
+    filename=$(basename "$file" .txt)
     # Construct the corresponding weight file path using weight_path and filename
     weight_file="$weight_path/$filename/$filename.th"
 
