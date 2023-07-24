@@ -1,5 +1,5 @@
 dataset_name = ilsh
-datadir = ../data_root/devPhase/004_00
+datadir = ../data_root/chaPhase/002_00
 expname =  ilsh_test_mask
 basedir = ./log
 
@@ -21,10 +21,11 @@ vis_every = 5000
 
 n_lamb_sigma = [16,4,4]
 n_lamb_sh = [48,12,12]
-model_name = TensorVMSplit
+model_name = TensorVMSplit_ZipNeRF
 
-shadingMode = MLP_freenerf_Fea
+#shadingMode = MLP_freenerf_Fea
 #shadingMode = MLP_Fea
+shadingMode = mixed
 fea2denseAct = relu
 
 view_pe = 0

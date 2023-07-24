@@ -14,10 +14,10 @@ import datetime
 from dataLoader import dataset_dict
 import sys
 
-
+from models.tensoRF import TensorVM, TensorCP, raw2alpha, TensorVMSplit, AlphaGridMask
+from models.tensoRF_ZipNeRF import TensorVMSplit_ZipNeRF
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 
 class SimpleSampler:
     def __init__(self, total, batch):
@@ -91,8 +91,8 @@ def render_test(args):
 
 def visualization(args):
     dataset = dataset_dict[args.dataset_name]
-    test_dataset = dataset(args.datadir, split='test', downsample=args.downsample_train, is_stack=True)
-    train_dataset = dataset(args.datadir, split='train', downsample=args.downsample_train, is_stack=True) #stack TRUE!!
+    test_dataset = dataset(args.datadir, split='test', downsample=args.downsample_train, is_stack=True, hold_every=args.hold_every)
+    train_dataset = dataset(args.datadir, split='train', downsample=args.downsample_train, is_stack=True, hold_every=args.hold_every) #stack TRUE!!
     white_bg = test_dataset.white_bg
     ndc_ray = args.ndc_ray
     if not os.path.exists(args.ckpt):
@@ -102,6 +102,7 @@ def visualization(args):
     ckpt = torch.load(args.ckpt, map_location=device)
     kwargs = ckpt['kwargs']
     kwargs.update({'device': device})
+    kwargs.update({'frustums_vertices': train_dataset.frustums_vertices})
     tensorf = eval(args.model_name)(**kwargs)
     tensorf.load(ckpt)
 
@@ -128,8 +129,8 @@ def reconstruction(args):
 
     # init dataset
     dataset = dataset_dict[args.dataset_name]
-    train_dataset = dataset(args.datadir, split='train', downsample=args.downsample_train, is_stack=False)
-    test_dataset = dataset(args.datadir, split='test', downsample=args.downsample_train, is_stack=True)
+    train_dataset = dataset(args.datadir, split='train', downsample=args.downsample_train, is_stack=False, hold_every=args.hold_every)
+    test_dataset = dataset(args.datadir, split='test', downsample=args.downsample_train, is_stack=True, hold_every=args.hold_every)
     white_bg = train_dataset.white_bg
     near_far = train_dataset.near_far
     ndc_ray = args.ndc_ray
@@ -139,7 +140,7 @@ def reconstruction(args):
     update_AlphaMask_list = args.update_AlphaMask_list
     n_lamb_sigma = args.n_lamb_sigma
     n_lamb_sh = args.n_lamb_sh
-
+    frustum_vertices = train_dataset.get_frustum_vertices()
     
     if args.add_timestamp:
         logfolder = f'{args.basedir}/{args.expname}{datetime.datetime.now().strftime("-%Y%m%d-%H%M%S")}'
@@ -183,7 +184,8 @@ def reconstruction(args):
         tensorf = eval(args.model_name)(aabb, reso_cur, device,
                     density_n_comp=n_lamb_sigma, appearance_n_comp=n_lamb_sh, app_dim=args.data_dim_color, near_far=near_far,
                     shadingMode=args.shadingMode, alphaMask_thres=args.alpha_mask_thre, density_shift=args.density_shift, distance_scale=args.distance_scale,
-                    pos_pe=args.pos_pe, view_pe=args.view_pe, fea_pe=args.fea_pe, featureC=args.featureC, step_ratio=args.step_ratio, fea2denseAct=args.fea2denseAct)
+                    pos_pe=args.pos_pe, view_pe=args.view_pe, fea_pe=args.fea_pe, featureC=args.featureC, step_ratio=args.step_ratio, fea2denseAct=args.fea2denseAct,
+                    frustums_vertices=frustum_vertices)
 
 
     grad_vars = tensorf.get_optparam_groups(args.lr_init, args.lr_basis)
@@ -206,8 +208,12 @@ def reconstruction(args):
     PSNRs,PSNRs_test = [],[0]
 
     allrays, allrgbs = train_dataset.all_rays, train_dataset.all_rgbs
-    if not args.ndc_ray:
-        allrays, allrgbs = tensorf.filtering_rays(allrays, allrgbs, bbox_only=True)
+    if args.model_name == "TensorVMSplit_ZipNeRF":
+        allorigins = train_dataset.all_origins
+        alldirections = train_dataset.all_directions
+        allallcam_dirs, allradii = train_dataset.all_cam_dirs, train_dataset.all_radii
+    # if not args.ndc_ray:
+    #     allrays, allrgbs = tensorf.filtering_rays(allrays, allrgbs, bbox_only=True)
     trainingSampler = SimpleSampler(allrays.shape[0], args.batch_size)
 
     Ortho_reg_weight = args.Ortho_weight
@@ -225,10 +231,30 @@ def reconstruction(args):
         ray_idx = trainingSampler.nextids()
         rays_train, rgb_train = allrays[ray_idx], allrgbs[ray_idx].to(device)
 
-        # rgb_map, alphas_map, depth_map, weights, uncertainty
-        rgb_map, alphas_map, depth_map, weights, uncertainty = renderer(rays_train, tensorf, chunk=args.batch_size,
-                                N_samples=nSamples, white_bg = white_bg, ndc_ray=ndc_ray, device=device, is_train=True,
-                                train_iter=iteration)
+        if args.model_name == "TensorVMSplit_ZipNeRF":
+            rgb_train = allrgbs[ray_idx].to(device)
+            origins_train = allorigins[ray_idx].to(device)
+            # print(allrays.shape, allrgbs.shape, alldirections.shape, allallcam_dirs.shape)
+            origin_directions_train = alldirections[ray_idx]
+            cam_dirs_train, radii_train = allallcam_dirs[ray_idx], allradii[ray_idx]
+            rgb_map, alphas_map, depth_map, weights, uncertainty = zipnerf_renderer(rays_train, tensorf,
+                                                                                        chunk=args.batch_size,
+                                                                                        N_samples=nSamples,
+                                                                                        ndc_ray=ndc_ray,
+                                                                                        white_bg=white_bg,
+                                                                                        is_train=True,
+                                                                                        img_wh=[0,0],
+                                                                                        train_iter=iteration,
+                                                                                        device=device,
+                                                                                        origins=origins_train,
+                                                                                        origin_directions=origin_directions_train,
+                                                                                        cam_dirs=cam_dirs_train,
+                                                                                        radiis=radii_train)
+        else:
+            rgb_map, alphas_map, depth_map, weights, uncertainty = renderer(rays_train, tensorf, chunk=args.batch_size,
+                                    N_samples=nSamples, white_bg = white_bg, ndc_ray=ndc_ray, device=device, is_train=True,
+                                    train_iter=iteration)
+
         if args.loss_type == "MSE":
             loss = torch.mean((rgb_map - rgb_train) ** 2)
         elif args.loss_type == "RAW_NERF":

@@ -7,6 +7,10 @@ import numpy as np
 import time
 import random
 import csv
+from models.zip_nerf_enc import coord
+from gridencoder import GridEncoder
+import torch.nn as nn
+
 
 def positional_encoding(positions, freqs):
     
@@ -164,6 +168,63 @@ class MLPRender_PE(torch.nn.Module):
 
         return rgb
 
+
+class MLPRender_ZipNeRF_PE(torch.nn.Module):
+    def __init__(self,inChanel, viewpe=6, pospe=6, featureC=128):
+        super(MLPRender_ZipNeRF_PE, self).__init__()
+
+
+        self.grid_num_levels = 10
+        self.grid_level_dim = 1
+        self.grid_base_resolution = 16
+        self.grid_disired_resolution = 8192
+        self.grid_log2_hashmap_size = 21
+        self.encoder = GridEncoder(input_dim=3,
+                                   num_levels=self.grid_num_levels,
+                                   level_dim=self.grid_level_dim,
+                                   base_resolution=self.grid_base_resolution,
+                                   desired_resolution=self.grid_disired_resolution,
+                                   log2_hashmap_size=self.grid_log2_hashmap_size,
+                                   gridtype='hash',
+                                   align_corners=False)
+        self.density_layer = nn.Sequential(nn.Linear(self.encoder.output_dim, 64),
+                                           nn.ReLU(),
+                                           nn.Linear(64, 3))  # Hardcoded to a single channel.
+
+        # self.in_mlpC = (3+2*viewpe*3)+ (3+2*pospe*3)  + inChanel #
+        self.in_mlpC = 37
+        self.viewpe = viewpe
+        self.pospe = pospe
+        layer1 = torch.nn.Linear(self.in_mlpC, featureC)
+        layer2 = torch.nn.Linear(featureC, featureC)
+        layer3 = torch.nn.Linear(featureC,3)
+        self.mlp = torch.nn.Sequential(layer1, torch.nn.ReLU(inplace=True), layer2, torch.nn.ReLU(inplace=True), layer3)
+        torch.nn.init.constant_(self.mlp[-1].bias, 0)
+
+    def forward(self, means, stds, features):
+        indata = [features]
+        # print(features.shape) # torch.Size([370143, 27])
+        means, stds = coord.track_linearize("contract", means, stds)
+        # contract [-2, 2] to [-1, 1]
+        bound = 2
+        means = means / bound
+        stds = stds / bound
+
+        zip_features = self.encoder(means, bound=1).unflatten(-1, (self.encoder.num_levels, -1))
+        weights = torch.erf(1 / torch.sqrt(8 * stds[..., None] ** 2 * self.encoder.grid_sizes ** 2))
+        zip_features = (zip_features * weights[..., None]).mean(dim=-3).flatten(-2, -1)
+
+        indata += [zip_features]
+        mlp_in = torch.cat(indata, dim=-1)
+        # print(zip_features.shape)  # torch.Size([370143, 10])
+        # print(mlp_in.shape)         # torch.Size([370143, 37])
+
+
+        rgb = self.mlp(mlp_in)
+        rgb = torch.sigmoid(rgb)
+        return rgb
+
+
 class MLPRender(torch.nn.Module):
     def __init__(self,inChanel, viewpe=6, featureC=128):
         super(MLPRender, self).__init__()
@@ -195,7 +256,7 @@ class TensorBase(torch.nn.Module):
                     shadingMode = 'MLP_PE', alphaMask = None, near_far=[2.0,6.0],
                     density_shift = -10, alphaMask_thres=0.001, distance_scale=25, rayMarch_weight_thres=0.0001,
                     pos_pe = 6, view_pe = 6, fea_pe = 6, featureC=128, step_ratio=2.0,
-                    fea2denseAct = 'softplus'):
+                    fea2denseAct = 'softplus', frustums_vertices = []):
         super(TensorBase, self).__init__()
 
         self.density_n_comp = density_n_comp
@@ -210,9 +271,9 @@ class TensorBase(torch.nn.Module):
         self.distance_scale = distance_scale
         self.rayMarch_weight_thres = rayMarch_weight_thres
         self.fea2denseAct = fea2denseAct
-
+        self.frustums_vertices = frustums_vertices
         self.near_far = near_far
-        #self.near_far = [3.75,3.78]
+        # self.near_far = [3.75,3.78]
         print("@@@ near_far :{} ".format(self.near_far))  # before :3.5, 7.0
         self.step_ratio = step_ratio
 
@@ -227,7 +288,44 @@ class TensorBase(torch.nn.Module):
         self.init_svd_volume(gridSize[0], device)
 
         self.shadingMode, self.pos_pe, self.view_pe, self.fea_pe, self.featureC = shadingMode, pos_pe, view_pe, fea_pe, featureC
-        self.init_render_func(shadingMode, pos_pe, view_pe, fea_pe, featureC, device)
+
+        if shadingMode == "MLP_ZipNeRF_Fea":
+            self.renderModule = MLPRender_ZipNeRF_PE(self.app_dim, view_pe, pos_pe, featureC).to(device)
+        elif shadingMode == "mixed":
+            self.renderModule1 = MLPRender_ZipNeRF_PE(self.app_dim, view_pe, pos_pe, featureC).to(device)
+            self.renderModule2 = MLPRender_freenerf_Fea(self.app_dim, view_pe, fea_pe, featureC).to(device)
+        else:
+            self.init_render_func(shadingMode, pos_pe, view_pe, fea_pe, featureC, device)
+
+
+    def check_points_in_frustum(self, points, frustum_vertices):
+        device = points.device
+        frustum_vertices = frustum_vertices.T[:,:3]
+        frustum_vertices = torch.from_numpy(frustum_vertices).to(device, dtype=torch.float32)
+        # Compute plane normals and coefficients
+        plane_indices = torch.tensor([[0,1,3],[4,7,5],[0,4,1],[2,6,3],[0,3,4],[1,5,2]], device=device)
+        planes = torch.cross(frustum_vertices[plane_indices[:, 1]] - frustum_vertices[plane_indices[:, 0]],
+                            frustum_vertices[plane_indices[:, 2]] - frustum_vertices[plane_indices[:, 0]], dim=1)
+        plane_coefficients = -torch.sum(planes * frustum_vertices[plane_indices[:, 0]], dim=1)
+        # Compute signed distances from point to each frustum plane
+        signed_dists = (planes @ points.T) + plane_coefficients.unsqueeze(1).float()
+        # Point is inside the frustum if the signed distances to all frustum planes are non-positive
+        visible = (signed_dists <= 0).all(dim=0)
+        return visible
+
+
+    def filter_points_by_visibility(self, points, min_visible_frustums):
+        original_shape = points.shape
+        points = points.reshape(-1, 3).float()
+        filter_mask = torch.ones_like(points, dtype=bool)
+        # points = points.cpu().numpy()
+        invisible_frustums = torch.sum(torch.stack([self.check_points_in_frustum(points, frustum_vertices) for frustum_vertices in self.frustums_vertices]), dim=0)
+        filter_mask = (invisible_frustums < min_visible_frustums)
+        # if visible_frustums >= min_visible_frustums:
+        # 	filter_mask[i] = True
+        filter_mask = filter_mask.reshape(original_shape[0], original_shape[1])
+        return filter_mask
+
 
     def init_render_func(self, shadingMode, pos_pe, view_pe, fea_pe, featureC, device):
         if shadingMode == 'MLP_PE':
@@ -364,8 +462,10 @@ class TensorBase(torch.nn.Module):
 
         ### bound 밖에 위치 할 경우, 1인 array를 획득
         mask_outbbox = ((self.aabb[0]>rays_pts) | (rays_pts>self.aabb[1])).any(dim=-1)
-        #print(rays_pts.shape, interpx.shape, mask_outbbox.shape) # (4096, 459, 3), (4096, 459) , (4096, 459) <-example
 
+        mask_vsc = self.filter_points_by_visibility(rays_pts, 15).to(mask_outbbox.device)
+        mask_outbbox = torch.logical_or(mask_outbbox, mask_vsc)
+        #print(rays_pts.shape, interpx.shape, mask_outbbox.shape) # (4096, 459, 3), (4096, 459) , (4096, 459) <-example
 
         return rays_pts, interpx, ~mask_outbbox
 

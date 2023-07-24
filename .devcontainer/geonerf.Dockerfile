@@ -73,6 +73,13 @@ RUN git clone -b 2.0.4 https://github.com/Syllo/nvtop.git && \
     cd ../.. && \
     rm -rf nvtop
 
+# Install ZIP-NeRF Requirements
+WORKDIR /workspace
+RUN git clone https://github.com/SuLvXiangXin/zipnerf-pytorch.git
+WORKDIR /workspace/zipnerf-pytorch
+# RUN pip install -r requirements.txt
+RUN pip install ./gridencoder
+
 # Install tmux-beautify
 RUN git clone https://github.com/gpakosz/.tmux.git ~/.oh-my-tmux \
 	&& echo "set -g mouse on" >> ~/.oh-my-tmux/.tmux.conf \
