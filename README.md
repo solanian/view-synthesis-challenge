@@ -1,9 +1,5 @@
 # setup dataset
 
-```
-./setup_challenge_dataset.sh
-```
-
 # setup requirments
 
 ```
