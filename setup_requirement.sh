@@ -5,3 +5,4 @@ pip install tqdm scikit-image opencv-python configargparse lpips imageio-ffmpeg 
 pip install plyfile
 pip install ninja
 pip install gdown
+pip install TensoRF/gridencoder
